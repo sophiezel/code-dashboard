@@ -1,10 +1,10 @@
-// Types for database rows
+// Types for SQLite database rows (all columns are strings from SQLite TEXT storage)
 export interface Report {
   id: number;
   type: string;
   title: string | null;
   content: string;
-  metadata: Record<string, unknown> | null;
+  metadata: string | null;  // JSON string
   created_at: string;
 }
 
@@ -12,7 +12,7 @@ export interface MacroScore {
   date: string;
   score: number;
   position: number;
-  indicators: Record<string, number> | null;
+  indicators: string | null;  // JSON string
   created_at: string;
 }
 
@@ -21,6 +21,6 @@ export interface SentimentData {
   score: number;
   limit_up_count: number;
   limit_up_rate: number;
-  details: Record<string, unknown> | null;
+  details: string | null;  // JSON string
   created_at: string;
 }

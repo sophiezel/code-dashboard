@@ -49,12 +49,12 @@ function HealthStatus({ report }: { report: { content: string; created_at: strin
   );
 }
 
-export default async function HealthPage() {
-  const healthReports = await getRecentReports("health_check", 5);
+export default function HealthPage() {
+  const healthReports = getRecentReports("health_check", 5);
   const latestHealth = healthReports.length > 0 ? healthReports[0] : null;
 
   // Get all report types and their latest timestamps
-  const allRecent = await getRecentReports(undefined, 100);
+  const allRecent = getRecentReports(undefined, 100);
   const latestByType = new Map<string, string>();
   for (const r of allRecent) {
     if (!latestByType.has(r.type) || r.created_at > latestByType.get(r.type)!) {

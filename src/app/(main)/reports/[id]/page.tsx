@@ -15,7 +15,7 @@ export default async function ReportDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const report = await getReportById(parseInt(id));
+  const report = getReportById(parseInt(id));
 
   if (!report) {
     notFound();

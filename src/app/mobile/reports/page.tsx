@@ -13,8 +13,8 @@ export default async function MobileReportsPage({
 }) {
   const params = await searchParams;
   const filterType = params.type || undefined;
-  const reports = await getRecentReports(filterType, 30);
-  const types = await getReportTypes();
+  const reports = getRecentReports(filterType, 30);
+  const types = getReportTypes();
 
   return (
     <div className="space-y-4">

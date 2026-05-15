@@ -13,19 +13,19 @@ import { TrendingUp, Activity, FileText, Shield } from "lucide-react";
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
-export default async function HomePage() {
-  const macro = await getLatestMacroScore();
-  const sentiment = await getLatestSentiment();
-  const totalReports = await getReportCount();
+export default function HomePage() {
+  const macro = getLatestMacroScore();
+  const sentiment = getLatestSentiment();
+  const totalReports = getReportCount();
 
   // Latest key reports
-  const latestPicks = await getLatestReportByType("daily_picks");
-  const latestBuy = await getLatestReportByType("buy_signals");
-  const latestReview = await getLatestReportByType("portfolio_review");
-  const latestHealth = await getLatestReportByType("health_check");
+  const latestPicks = getLatestReportByType("daily_picks");
+  const latestBuy = getLatestReportByType("buy_signals");
+  const latestReview = getLatestReportByType("portfolio_review");
+  const latestHealth = getLatestReportByType("health_check");
 
   // Recent 8 reports
-  const recent = (await getRecentReports(undefined, 8)).map((r) => ({
+  const recent = (getRecentReports(undefined, 8)).map((r) => ({
     id: r.id,
     type: r.type,
     title: r.title,

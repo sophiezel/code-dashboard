@@ -2,19 +2,27 @@ import { getMacroScores, getLatestMacroScore } from "@/lib/db";
 import { MacroRing } from "@/components/mobile/macro-ring";
 import { SparklineChart } from "@/components/mobile/sparkline";
 import { TrendingUp, DollarSign, BarChart3 } from "lucide-react";
+import { safeJsonParse } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
-export default async function MobileMacroPage() {
-  const scores = await getMacroScores(60);
-  const latest = await getLatestMacroScore();
+/** pg driver may return PostgreSQL date as JS Date object — force to string */
+function safeDate(v: unknown): string {
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v ?? "");
+}
+
+export default function MobileMacroPage() {
+  const scores = getMacroScores(60);
+  const latest = getLatestMacroScore();
 
   const chartData = [...scores].reverse();
   const scoreValues = chartData.map((s) => s.score);
   const positionValues = chartData.map((s) => s.position * 100);
 
-  const latestIndicators = latest?.indicators || null;
+  const latestIndicators = safeJsonParse(latest?.indicators ?? null);
+  const latestDate = latest ? safeDate(latest.date) : null;
 
   return (
     <div className="space-y-4">
@@ -39,7 +47,7 @@ export default async function MobileMacroPage() {
                     仓位 {(latest.position * 100).toFixed(0)}%
                   </span>
                 </div>
-                <p className="text-[11px] text-zinc-500 mt-1">{latest.date}</p>
+                <p className="text-[11px] text-zinc-500 mt-1">{latestDate}</p>
               </div>
             </div>
 
@@ -66,7 +74,7 @@ export default async function MobileMacroPage() {
                 <TrendingUp className="w-4 h-4 text-emerald-400" />
                 <span className="text-xs font-medium text-zinc-400">评分趋势</span>
                 <span className="text-[10px] text-zinc-600 ml-auto">
-                  {chartData[0]?.date} → {chartData[chartData.length - 1]?.date}
+                  {safeDate(chartData[0]?.date)} → {safeDate(chartData[chartData.length - 1]?.date)}
                 </span>
               </div>
               <SparklineChart data={scoreValues} color="#10b981" height={50} className="w-full h-12" />

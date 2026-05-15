@@ -1,16 +1,18 @@
 import { getSentimentHistory, getLatestSentiment } from "@/lib/db";
 import { StatCard } from "@/components/stat-card";
+import { safeJsonParse } from "@/lib/utils";
 import { Activity, TrendingUp, Zap, Flame } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
-export default async function SentimentPage() {
-  const history = await getSentimentHistory(60);
-  const latest = await getLatestSentiment();
+export default function SentimentPage() {
+  const history = getSentimentHistory(60);
+  const latest = getLatestSentiment();
 
   const chartData = [...history].reverse();
   const scoreValues = chartData.map((s) => s.score);
+  const latestDetails = safeJsonParse(latest?.details ?? null);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -49,13 +51,13 @@ export default async function SentimentPage() {
           </div>
 
           {/* Details */}
-          {latest.details && (
+          {latestDetails && (
             <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-5">
               <h2 className="text-sm font-semibold text-zinc-300 mb-3">
                 情绪详情
               </h2>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {Object.entries(latest.details).map(([key, value]) => (
+                {Object.entries(latestDetails).map(([key, value]) => (
                   <div
                     key={key}
                     className="rounded-lg border border-zinc-800 bg-zinc-900/80 p-3"

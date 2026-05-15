@@ -7,34 +7,24 @@ import {
   getSentimentHistory,
 } from "@/lib/db";
 import { MobileDashboardClient } from "./MobileDashboardClient";
+import { safeJsonParse } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
 
-function safeParse(json: string | Record<string,unknown> | null): Record<string, unknown> | null {
-  if (!json) return null;
-  // Neon JSONB returns already-parsed objects, SQLite returns strings
-  if (typeof json === "object") return json as Record<string, unknown>;
-  try {
-    const parsed = JSON.parse(json);
-    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
-  } catch {
-    return null;
-  }
-}
 
-export default async function MobileDashboardPage() {
-  const macro = await getLatestMacroScore();
-  const sentiment = await getLatestSentiment();
-  const recent = await getRecentReports(undefined, 8);
-  const latestPicks = await getLatestReportByType("daily_picks");
-  const latestBuy = await getLatestReportByType("buy_signals");
-  const latestReview = await getLatestReportByType("portfolio_review");
-  const macroScores = await getMacroScores(60);
-  const sentimentHistory = await getSentimentHistory(60);
+export default function MobileDashboardPage() {
+  const macro = getLatestMacroScore();
+  const sentiment = getLatestSentiment();
+  const recent = getRecentReports(undefined, 8);
+  const latestPicks = getLatestReportByType("daily_picks");
+  const latestBuy = getLatestReportByType("buy_signals");
+  const latestReview = getLatestReportByType("portfolio_review");
+  const macroScores = getMacroScores(60);
+  const sentimentHistory = getSentimentHistory(60);
 
-  const macroParsed = macro ? safeParse(macro.indicators as unknown as string) : null;
-  const sentParsed = sentiment ? safeParse(sentiment.details as unknown as string) : null;
+  const macroParsed = macro ? safeJsonParse(macro.indicators as unknown as string) : null;
+  const sentParsed = sentiment ? safeJsonParse(sentiment.details as unknown as string) : null;
 
   return (
     <MobileDashboardClient

@@ -5,6 +5,18 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Parse JSON string from SQLite TEXT column into object. Returns null on failure. */
+export function safeJsonParse(json: string | Record<string, unknown> | null): Record<string, unknown> | null {
+  if (!json) return null;
+  if (typeof json === "object") return json as Record<string, unknown>;
+  try {
+    const parsed = JSON.parse(json);
+    return typeof parsed === "object" && parsed !== null ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
   return d.toLocaleString("zh-CN", {

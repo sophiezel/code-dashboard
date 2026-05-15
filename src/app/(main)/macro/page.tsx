@@ -1,5 +1,6 @@
 import { getMacroScores, getLatestMacroScore } from "@/lib/db";
 import { StatCard } from "@/components/stat-card";
+import { safeJsonParse } from "@/lib/utils";
 import { TrendingUp, Activity, DollarSign, BarChart3 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -40,9 +41,9 @@ function Sparkline({
   );
 }
 
-export default async function MacroPage() {
-  const scores = await getMacroScores(60);
-  const latest = await getLatestMacroScore();
+export default function MacroPage() {
+  const scores = getMacroScores(60);
+  const latest = getLatestMacroScore();
 
   // Reverse for chart display (oldest first)
   const chartData = [...scores].reverse();
@@ -50,7 +51,7 @@ export default async function MacroPage() {
   const scoreValues = chartData.map((s) => s.score);
   const positionValues = chartData.map((s) => s.position * 100);
 
-  const latestIndicators = latest?.indicators || null;
+  const latestIndicators = safeJsonParse(latest?.indicators ?? null);
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">

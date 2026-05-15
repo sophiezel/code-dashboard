@@ -13,8 +13,8 @@ const SIGNAL_TYPES = [
   "risk_alert",
 ];
 
-export default async function MobileSignalsPage() {
-  const allReports = await getRecentReports(undefined, 60);
+export default function MobileSignalsPage() {
+  const allReports = getRecentReports(undefined, 60);
   const signalReports = allReports
     .filter((r) => SIGNAL_TYPES.includes(r.type))
     .slice(0, 20);

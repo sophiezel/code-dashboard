@@ -13,14 +13,14 @@ export default async function ReportsPage({
 }) {
   const params = await searchParams;
   const filterType = params.type || undefined;
-  const reports = (await getRecentReports(filterType, 40)).map((r) => ({
+  const reports = (getRecentReports(filterType, 40)).map((r) => ({
     id: r.id,
     type: r.type,
     title: r.title,
     preview: r.content.substring(0, 200).replace(/[#*`\n]/g, " ").trim(),
     created_at: r.created_at,
   }));
-  const types = await getReportTypes();
+  const types = getReportTypes();
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
