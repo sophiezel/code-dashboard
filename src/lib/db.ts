@@ -12,15 +12,16 @@ const pool = new Pool({
 export async function getRecentReports(type?: string, limit = 20): Promise<Report[]> {
   const client = await pool.connect();
   try {
+    const cols = "id, type, title, content, metadata, created_at::text as created_at";
     if (type) {
       const res = await client.query(
-        "SELECT * FROM reports WHERE type = $1 ORDER BY created_at DESC LIMIT $2",
+        `SELECT ${cols} FROM reports WHERE type = $1 ORDER BY created_at DESC LIMIT $2`,
         [type, limit]
       );
       return res.rows as Report[];
     }
     const res = await client.query(
-      "SELECT * FROM reports ORDER BY created_at DESC LIMIT $1",
+      `SELECT ${cols} FROM reports ORDER BY created_at DESC LIMIT $1`,
       [limit]
     );
     return res.rows as Report[];
@@ -32,7 +33,10 @@ export async function getRecentReports(type?: string, limit = 20): Promise<Repor
 export async function getReportById(id: number): Promise<Report | null> {
   const client = await pool.connect();
   try {
-    const res = await client.query("SELECT * FROM reports WHERE id = $1", [id]);
+    const res = await client.query(
+      "SELECT id, type, title, content, metadata, created_at::text as created_at FROM reports WHERE id = $1",
+      [id]
+    );
     return (res.rows[0] as Report) || null;
   } finally {
     client.release();
@@ -43,7 +47,7 @@ export async function getLatestReportByType(type: string): Promise<Report | null
   const client = await pool.connect();
   try {
     const res = await client.query(
-      "SELECT * FROM reports WHERE type = $1 ORDER BY created_at DESC LIMIT 1",
+      "SELECT id, type, title, content, metadata, created_at::text as created_at FROM reports WHERE type = $1 ORDER BY created_at DESC LIMIT 1",
       [type]
     );
     return (res.rows[0] as Report) || null;
@@ -78,7 +82,7 @@ export async function getMacroScores(limit = 60): Promise<MacroScore[]> {
   const client = await pool.connect();
   try {
     const res = await client.query(
-      "SELECT * FROM macro_scores ORDER BY date DESC LIMIT $1",
+      "SELECT date::text as date, score, position, indicators, created_at::text as created_at FROM macro_scores ORDER BY date DESC LIMIT $1",
       [limit]
     );
     return res.rows as MacroScore[];
@@ -91,7 +95,7 @@ export async function getLatestMacroScore(): Promise<MacroScore | null> {
   const client = await pool.connect();
   try {
     const res = await client.query(
-      "SELECT * FROM macro_scores ORDER BY date DESC LIMIT 1"
+      "SELECT date::text as date, score, position, indicators, created_at::text as created_at FROM macro_scores ORDER BY date DESC LIMIT 1"
     );
     return (res.rows[0] as MacroScore) || null;
   } finally {
@@ -105,7 +109,7 @@ export async function getSentimentHistory(limit = 60): Promise<SentimentData[]> 
   const client = await pool.connect();
   try {
     const res = await client.query(
-      "SELECT * FROM sentiment ORDER BY date DESC LIMIT $1",
+      "SELECT date::text as date, score, limit_up_count, limit_up_rate, details, created_at::text as created_at FROM sentiment ORDER BY date DESC LIMIT $1",
       [limit]
     );
     return res.rows as SentimentData[];
@@ -118,7 +122,7 @@ export async function getLatestSentiment(): Promise<SentimentData | null> {
   const client = await pool.connect();
   try {
     const res = await client.query(
-      "SELECT * FROM sentiment ORDER BY date DESC LIMIT 1"
+      "SELECT date::text as date, score, limit_up_count, limit_up_rate, details, created_at::text as created_at FROM sentiment ORDER BY date DESC LIMIT 1"
     );
     return (res.rows[0] as SentimentData) || null;
   } finally {
