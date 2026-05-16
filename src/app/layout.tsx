@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Hermes Dashboard",
-  description: "投研数据后台",
+  title: "天工 Dashboard",
+  description: "量化投研数据平台",
 };
 
 export default function RootLayout({

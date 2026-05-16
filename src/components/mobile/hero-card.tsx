@@ -35,7 +35,7 @@ export function HeroCard({
         {/* Header row */}
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h1 className="text-lg font-bold tracking-tight">Hermes</h1>
+            <h1 className="text-lg font-bold tracking-tight">天工</h1>
             <p className="text-[11px] text-zinc-500 mt-0.5">
               {date || new Date().toLocaleDateString("zh-CN", {
                 year: "numeric",

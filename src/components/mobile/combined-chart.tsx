@@ -108,7 +108,27 @@ export function CombinedChart({
   const groupGap = 4;
   const metricGap = 2;
   const groupWidth = barW * metrics.length + metricGap * (metrics.length - 1);
-  const chartW = Math.max(visibleData.length * (groupWidth + groupGap) + 16, containerW);
+
+  // Compute bar X positions accounting for date gaps (holidays/weekends)
+  const barPositions: { x: number; gapDays: number }[] = [];
+  let cumX = 8;
+  for (let i = 0; i < visibleData.length; i++) {
+    let gapDays = 0;
+    if (i > 0) {
+      const prev = new Date(visibleData[i - 1].date);
+      const curr = new Date(visibleData[i].date);
+      gapDays = Math.round((curr.getTime() - prev.getTime()) / 86400000) - 1;
+    }
+    // Extra padding for gaps
+    // 0-2 days: normal weekend, no marker
+    // 3-15 days: holiday, show "N天休"
+    // >15 days: data gap, show "数据缺失"
+    const extraGap = gapDays > 2 ? Math.min(gapDays * 0.8, 30) : 0;
+    cumX += extraGap;
+    barPositions.push({ x: cumX, gapDays });
+    cumX += groupWidth + groupGap;
+  }
+  const chartW = Math.max(cumX, containerW);
   const barAreaH = height - 18;
 
   const allValues = visibleData.flatMap((d) => metrics.map((m) => d.values[m.key] ?? 0));
@@ -203,10 +223,22 @@ export function CombinedChart({
 
           {/* Bars */}
           {visibleData.map((d, i) => {
-            const gx = 8 + i * (groupWidth + groupGap);
+            const gx = barPositions[i].x;
+            const gapDays = barPositions[i].gapDays;
 
             return (
               <g key={i}>
+                {/* Gap marker */}
+                {gapDays > 2 && (
+                  <>
+                    <line x1={gx - 8} y1={4} x2={gx - 2} y2={4}
+                      stroke={gapDays > 15 ? "#ef4444" : "#f59e0b"} strokeWidth="1.5" strokeDasharray="3 2" />
+                    <text x={gx - 5} y={10} textAnchor="middle"
+                      className="text-[6px]" fill={gapDays > 15 ? "#ef4444" : "#f59e0b"}>
+                      {gapDays > 15 ? "缺" : gapDays + "天休"}
+                    </text>
+                  </>
+                )}
                 {metrics.map((m, mi) => {
                   const v = d.values[m.key] ?? 0;
                   const h = Math.max(1, (v / dataMax) * barAreaH);

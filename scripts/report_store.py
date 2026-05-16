@@ -13,6 +13,9 @@ import os
 import threading
 from datetime import datetime, timedelta
 
+# Field-level encryption for report content
+from scripts.field_crypto import encrypt_content, decrypt_content
+
 SQLITE_PATH = os.path.expanduser("~/code/dashboard/data/reports.db")
 NEON_URL = os.environ.get("DATABASE_URL", "")
 CLEANUP_DAYS = 90
@@ -99,7 +102,7 @@ def store_report(report_type: str, content: str, title: str = None, metadata: di
         try:
             cur = db.execute(
                 "INSERT INTO reports (type, title, content, metadata, created_at) VALUES (?,?,?,?,?)",
-                (report_type, title, content, meta_json, now)
+                (report_type, title, encrypt_content(content), meta_json, now)
             )
             db.commit()
             row_id = cur.lastrowid
@@ -114,7 +117,7 @@ def store_report(report_type: str, content: str, title: str = None, metadata: di
                 meta_pg = json.dumps(metadata) if metadata else None
                 cur.execute(
                     "INSERT INTO reports (type, title, content, metadata) VALUES (%s,%s,%s,%s)",
-                    (report_type, title, content, meta_pg)
+                    (report_type, title, encrypt_content(content), meta_pg)
                 )
                 neon.commit()
             except Exception as e:

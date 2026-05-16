@@ -29,6 +29,9 @@ function getScreenerDb(): Database.Database {
   return db;
 }
 
+// Export for shared use by auth/quant modules
+export { getScreenerDb };
+
 // ─── Reports ─────────────────────────────────────────
 
 export function getRecentReports(type?: string, limit = 20): Report[] {
@@ -249,4 +252,30 @@ export function getLatestSentiment(): SentimentData | null {
   return (
     (db.prepare("SELECT * FROM sentiment_cache ORDER BY date DESC LIMIT 1").get() as SentimentData) || null
   );
+}
+
+// ─── Flow / Index / Futures (for mobile/flow, mobile/index) ──
+
+export function getHsgtHistory(limit = 60): { trade_date: string; net_buy: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, net_buy FROM hsgt_daily ORDER BY trade_date DESC LIMIT ?"
+  ).all(limit) as any[];
+}
+
+export function getMarginHistory(limit = 60): { trade_date: string; margin_balance: number; margin_buy: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, margin_balance, margin_buy FROM margin_daily ORDER BY trade_date DESC LIMIT ?"
+  ).all(limit) as any[];
+}
+
+export function getIndexDailyHistory(code: string, limit = 30): { trade_date: string; close: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, close FROM index_daily WHERE symbol = ? ORDER BY trade_date DESC LIMIT ?"
+  ).all(code, limit) as any[];
+}
+
+export function getGlobalIndexHistory(symbol: string, limit = 30): { trade_date: string; close: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, close FROM index_global_daily WHERE symbol = ? ORDER BY trade_date DESC LIMIT ?"
+  ).all(symbol, limit) as any[];
 }

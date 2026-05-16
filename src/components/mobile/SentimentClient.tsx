@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { CombinedChart, MiniSparkline } from "@/components/mobile/combined-chart";
-import { Activity } from "lucide-react";
+import { Activity, Calendar } from "lucide-react";
 
 interface SentimentClientProps {
   chartData: { date: string; values: Record<string, number> }[];
@@ -29,6 +29,15 @@ function fmtInt(v: number): string {
   return String(Math.round(v));
 }
 
+function shiftRange(start: string, end: string, direction: 1 | -1): [string, string] {
+  const s = new Date(start);
+  const e = new Date(end);
+  const span = e.getTime() - s.getTime();
+  const ns = new Date(s.getTime() + direction * span);
+  const ne = new Date(e.getTime() + direction * span);
+  return [ns.toISOString().slice(0, 10), ne.toISOString().slice(0, 10)];
+}
+
 const KEY_METRICS = [
   { key: "涨停家数", label: "涨停", color: "#10b981" },
   { key: "跌停家数", label: "跌停", color: "#ef4444" },
@@ -50,7 +59,6 @@ export function SentimentClient({
   const [showCustom, setShowCustom] = useState(false);
   const [visibleRange, setVisibleRange] = useState<{ start: string; end: string } | null>(null);
 
-  // Determine which data slice to show
   let filteredData = chartData;
   if (showCustom) {
     const start = customStart || chartData[0]?.date || "";
@@ -75,7 +83,6 @@ export function SentimentClient({
         const start = chartData[Math.max(0, firstIdx)]?.date ?? "";
         const end = chartData[Math.min(totalLen - 1, lastIdx)]?.date ?? "";
         setVisibleRange(start && end ? { start, end } : null);
-        // Auto-update custom dates when scrolled past range
         if (showCustom && start && end) {
           if (start < (customStart || start) || end > (customEnd || end)) {
             setCustomStart(start);
@@ -130,24 +137,9 @@ export function SentimentClient({
       {/* Mini sparklines */}
       {chartData.length >= 2 && (
         <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 px-3 py-1.5 divide-y divide-zinc-800/50">
-          <MiniSparkline
-            data={filteredData.map((d) => d.values.涨停家数)}
-            color="#10b981"
-            label="涨停家数"
-            value={fmtInt(latest.limit_up_count)}
-          />
-          <MiniSparkline
-            data={filteredData.map((d) => d.values.炸板率)}
-            color="#f59e0b"
-            label="炸板率"
-            value={`${((latestDetails?.["炸板率"] as number) * 100)?.toFixed(1) ?? "--"}%`}
-          />
-          <MiniSparkline
-            data={filteredData.map((d) => d.values.涨跌比)}
-            color="#3b82f6"
-            label="涨跌比"
-            value={(latestDetails?.["涨跌比"] as number)?.toFixed(2) ?? "--"}
-          />
+          <MiniSparkline data={filteredData.map((d) => d.values.涨停家数)} color="#10b981" label="涨停家数" value={fmtInt(latest.limit_up_count)} />
+          <MiniSparkline data={filteredData.map((d) => d.values.炸板率)} color="#f59e0b" label="炸板率" value={`${((latestDetails?.["炸板率"] as number) * 100)?.toFixed(1) ?? "--"}%`} />
+          <MiniSparkline data={filteredData.map((d) => d.values.涨跌比)} color="#3b82f6" label="涨跌比" value={(latestDetails?.["涨跌比"] as number)?.toFixed(2) ?? "--"} />
         </div>
       )}
 
@@ -170,7 +162,6 @@ export function SentimentClient({
           <button
             onClick={() => {
               if (!showCustom) {
-                // Pre-fill with full data range
                 setCustomStart(chartData[0]?.date ?? "");
                 setCustomEnd(chartData[chartData.length - 1]?.date ?? "");
               }
@@ -185,28 +176,53 @@ export function SentimentClient({
           <span className="text-[9px] text-zinc-500 ml-1">{tradingDays}个交易日</span>
         </div>
 
-        {/* Custom date range — toggled by "全部" */}
         {showCustom && (
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={customStart}
-              onChange={(e) => setCustomStart(e.target.value)}
-              className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-200 w-0 flex-1 min-w-0"
-              max={customEnd || undefined}
-            />
-            <span className="text-zinc-500 text-[10px]">→</span>
-            <input
-              type="date"
-              value={customEnd}
-              onChange={(e) => setCustomEnd(e.target.value)}
-              className="bg-zinc-800 border border-zinc-700 rounded px-2 py-1 text-[10px] text-zinc-200 w-0 flex-1 min-w-0"
-              min={customStart || undefined}
-            />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Quick presets */}
+            {[
+              { label: "本月", fn: () => {
+                const now = new Date();
+                setCustomStart(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0,10));
+                setCustomEnd(now.toISOString().slice(0,10));
+              }},
+              { label: "本季", fn: () => {
+                const now = new Date();
+                const q = Math.floor(now.getMonth() / 3);
+                setCustomStart(new Date(now.getFullYear(), q*3, 1).toISOString().slice(0,10));
+                setCustomEnd(now.toISOString().slice(0,10));
+              }},
+              { label: "本年", fn: () => {
+                const now = new Date();
+                setCustomStart(new Date(now.getFullYear(), 0, 1).toISOString().slice(0,10));
+                setCustomEnd(now.toISOString().slice(0,10));
+              }},
+              { label: "近半年", fn: () => {
+                const now = new Date();
+                const d = new Date(now);
+                d.setMonth(d.getMonth() - 6);
+                setCustomStart(d.toISOString().slice(0,10));
+                setCustomEnd(now.toISOString().slice(0,10));
+              }},
+            ].map(p => (
+              <button key={p.label} onClick={p.fn}
+                className="px-1.5 py-0.5 rounded text-[9px] text-zinc-500 bg-zinc-800/30 hover:bg-zinc-700/50 hover:text-zinc-300 transition-colors shrink-0"
+              >{p.label}</button>
+            ))}
+
+            {/* Compact date inputs — inline */}
+            <div className="flex items-center gap-0.5 bg-zinc-800/50 rounded-md pl-1.5 pr-1 py-1 border border-zinc-700/50">
+              <Calendar className="w-3 h-3 text-zinc-500 shrink-0" />
+              <input type="date" value={customStart} onChange={(e) => setCustomStart(e.target.value)}
+                className="bg-transparent text-[10px] text-zinc-200 w-[104px] text-center [color-scheme:dark] appearance-none"
+                max={customEnd || undefined} />
+              <span className="text-zinc-600 text-[9px] shrink-0">→</span>
+              <input type="date" value={customEnd} onChange={(e) => setCustomEnd(e.target.value)}
+                className="bg-transparent text-[10px] text-zinc-200 w-[104px] text-center [color-scheme:dark] appearance-none"
+                min={customStart || undefined} />
+            </div>
           </div>
         )}
 
-        {/* Visible range when scrolling */}
         {visibleRange && showCustom && (
           <div className="text-[9px] text-zinc-500 text-center">
             查看: {visibleRange.start} → {visibleRange.end}
@@ -214,38 +230,22 @@ export function SentimentClient({
         )}
       </div>
 
-      {/* Combined chart: 涨停 vs 跌停 */}
+      {/* Charts */}
       {chartData.length >= 2 && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-          <CombinedChart
-            data={chartData}
-            metrics={[...KEY_METRICS]}
-            height={90}
-            windowDays={windowDays}
-            customStart={showCustom ? customStart : undefined}
-            customEnd={showCustom ? customEnd : undefined}
-            formatValue={fmtInt}
-            onWindowChange={setWindowDays}
-            onVisibleRangeChange={handleVisibleChange}
-          />
-        </div>
-      )}
-
-      {/* Combined chart: 上涨 vs 下跌 */}
-      {chartData.length >= 2 && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-          <CombinedChart
-            data={chartData}
-            metrics={[...VOLUME_METRICS]}
-            height={90}
-            windowDays={windowDays}
-            customStart={showCustom ? customStart : undefined}
-            customEnd={showCustom ? customEnd : undefined}
-            formatValue={fmtInt}
-            onWindowChange={setWindowDays}
-            onVisibleRangeChange={handleVisibleChange}
-          />
-        </div>
+        <>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+            <CombinedChart data={chartData} metrics={[...KEY_METRICS]} height={90}
+              windowDays={windowDays}
+              customStart={showCustom ? customStart : undefined} customEnd={showCustom ? customEnd : undefined}
+              formatValue={fmtInt} onWindowChange={setWindowDays} onVisibleRangeChange={handleVisibleChange} />
+          </div>
+          <div className="rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
+            <CombinedChart data={chartData} metrics={[...VOLUME_METRICS]} height={90}
+              windowDays={windowDays}
+              customStart={showCustom ? customStart : undefined} customEnd={showCustom ? customEnd : undefined}
+              formatValue={fmtInt} onWindowChange={setWindowDays} onVisibleRangeChange={handleVisibleChange} />
+          </div>
+        </>
       )}
 
       {/* Detail grid */}
@@ -259,9 +259,7 @@ export function SentimentClient({
                   {typeof value === "number"
                     ? key.includes("率") || key.includes("比") || key.includes("溢价")
                       ? `${(value * 100).toFixed(1)}%`
-                      : Number.isInteger(value)
-                      ? String(value)
-                      : value.toFixed(2)
+                      : Number.isInteger(value) ? String(value) : value.toFixed(2)
                     : String(value)}
                 </span>
               </div>

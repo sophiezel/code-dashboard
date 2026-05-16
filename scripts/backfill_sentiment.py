@@ -66,7 +66,7 @@ def compute_sentiment_for_date(
 
     # 获取前一交易日
     prev_date_row = screener_db.execute(
-        "SELECT MAX(trade_date) FROM stock_daily WHERE trade_date < ?",
+        "SELECT MAX(trade_date) FROM stock_daily WHERE trade_date < ? AND (SELECT COUNT(*) FROM stock_daily s2 WHERE s2.trade_date=stock_daily.trade_date) >= 1000",
         (trade_date,),
     ).fetchone()
     prev_date = prev_date_row[0] if prev_date_row else None
@@ -166,12 +166,10 @@ def main():
     screener = sqlite3.connect(SCREENER_DB)
     screener.row_factory = sqlite3.Row
 
-    dashboard = sqlite3.connect(DASHBOARD_DB)
-    dashboard.execute("PRAGMA journal_mode=WAL")
-
-    # 确保表存在
-    dashboard.executescript("""
-    CREATE TABLE IF NOT EXISTS sentiment (
+    # 写入 screener.db.sentiment_cache（dashboard 读的就是这个）
+    screener.execute("PRAGMA journal_mode=WAL")
+    screener.executescript("""
+    CREATE TABLE IF NOT EXISTS sentiment_cache (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL UNIQUE,
         score INTEGER,
@@ -180,7 +178,7 @@ def main():
         details TEXT,
         created_at TEXT NOT NULL
     );
-    CREATE INDEX IF NOT EXISTS idx_sentiment_date ON sentiment(date);
+    CREATE INDEX IF NOT EXISTS idx_sentiment_date ON sentiment_cache(date);
     """)
 
     # 获取所有交易日
@@ -197,8 +195,8 @@ def main():
 
     for i, (trade_date,) in enumerate(dates):
         # 检查是否已存在
-        existing = dashboard.execute(
-            "SELECT 1 FROM sentiment WHERE date = ?", (trade_date,)
+        existing = screener.execute(
+            "SELECT 1 FROM sentiment_cache WHERE date = ?", (trade_date,)
         ).fetchone()
         if existing:
             skipped += 1
@@ -210,8 +208,8 @@ def main():
 
         import json
 
-        dashboard.execute(
-            "INSERT OR REPLACE INTO sentiment (date, score, limit_up_count, limit_up_rate, details, created_at) VALUES (?,?,?,?,?,?)",
+        screener.execute(
+            "INSERT OR REPLACE INTO sentiment_cache (date, score, limit_up_count, limit_up_rate, details, created_at) VALUES (?,?,?,?,?,?)",
             (
                 result["date"],
                 result["score"],
@@ -224,12 +222,11 @@ def main():
 
         inserted += 1
         if (i + 1) % 200 == 0:
-            dashboard.commit()
+            screener.commit()
             print(f"  {i+1}/{total} 已插入 {inserted}, 跳过 {skipped}")
 
-    dashboard.commit()
+    screener.commit()
     screener.close()
-    dashboard.close()
 
     print(f"\n✅ 完成: 总计 {total} 个交易日, 新增 {inserted}, 跳过 {skipped}")
     print(f"   日期范围: {start_date} → {end_date}")

@@ -58,6 +58,7 @@ export default function HomePage() {
           value={macroScoreDisplay}
           subtitle={macro ? `仓位建议: ${positionPercent}` : "暂无数据"}
           icon={<TrendingUp className="w-4 h-4" />}
+          obfuscate
           trend={
             macro && macro.score >= 70
               ? "up"
@@ -69,6 +70,7 @@ export default function HomePage() {
         <StatCard
           title="市场情绪"
           value={sentimentScoreDisplay}
+          obfuscate
           subtitle={
             sentiment
               ? `${sentiment.limit_up_count}家涨停`
