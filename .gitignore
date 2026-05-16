@@ -1,7 +1,8 @@
 node_modules/
 .next/
 data/reports.db
-.env
+.env*
+.env*.local
 *.pyc
 __pycache__/
 .DS_Store
