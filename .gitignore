@@ -2,6 +2,7 @@ node_modules/
 .next/
 data/reports.db
 .env*
+!.env.example
 .env*.local
 *.pyc
 __pycache__/
