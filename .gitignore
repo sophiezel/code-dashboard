@@ -6,3 +6,7 @@ data/reports.db
 __pycache__/
 .DS_Store
 .vercel/
+
+# SQLite runtime
+*.db-shm
+*.db-wal
