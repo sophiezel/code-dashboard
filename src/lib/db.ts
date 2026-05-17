@@ -738,14 +738,21 @@ export function getRiskOverview(): RiskOverview | null {
     max_drawdown: row.max_drawdown ?? 0,
     sector_concentration: row.sector_concentration ?? 0,
     current_drawdown_pct: row.max_drawdown ?? 0,
-    sharpe: 0, // risk_metrics 无此列，后续补充
+    total_drawdown_pct: row.max_drawdown ?? 0,
+    volatility: 0,       // risk_metrics 无此列
+    sharpe: 0,           // risk_metrics 无此列
+    max_consecutive_losses: 0,
+    update_time: row.trade_date ?? "",  // alias
   } as RiskOverview;
 }
 
 /** Get recent risk events / drawdown alerts */
 export function getRiskEvents(limit = 20): RiskEvent[] {
   return getScreenerDb().prepare(
-    "SELECT id, alert_time as date, drawdown_pct, current_pnl_pct, peak_pnl_pct, 'drawdown' as event_type FROM sim_drawdown_alerts ORDER BY alert_time DESC LIMIT ?"
+    "SELECT id, alert_time as date, drawdown_pct as metric_value, 0.15 as threshold, " +
+    "current_pnl_pct, peak_pnl_pct, 'drawdown' as event_type, 'warning' as severity, " +
+    "'' as symbol, '回撤告警' as type, '账户回撤超限' as message, 1 as acknowledged " +
+    "FROM sim_drawdown_alerts ORDER BY alert_time DESC LIMIT ?"
   ).all(limit) as RiskEvent[];
 }
 
