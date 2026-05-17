@@ -4,11 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import { Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Step = "phone" | "code" | "done";
+type Step = "code" | "done";
 
 export default function ActivatePage() {
-  const [step, setStep] = useState<Step>("phone");
-  const [phone, setPhone] = useState("");
+  const [step, setStep] = useState<Step>("code");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,37 +16,7 @@ export default function ActivatePage() {
 
   useEffect(() => {
     inputRef.current?.focus();
-  }, [step]);
-
-  async function submitPhone(e: React.FormEvent) {
-    e.preventDefault();
-    if (!/^\d{11}$/.test(phone)) {
-      setError("请输入11位手机号");
-      triggerShake();
-      return;
-    }
-    setError("");
-    setLoading(true);
-    try {
-      const res = await fetch("/api/activate/phone", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setStep("code");
-      } else {
-        setError(data.error || "提交失败");
-        triggerShake();
-      }
-    } catch {
-      setError("网络错误，请重试");
-      triggerShake();
-    } finally {
-      setLoading(false);
-    }
-  }
+  }, []);
 
   async function submitCode(e: React.FormEvent) {
     e.preventDefault();
@@ -71,9 +40,9 @@ export default function ActivatePage() {
       const data = await res.json();
       if (data.ok) {
         setStep("done");
-        // Redirect to homepage
         setTimeout(() => {
-          window.location.href = new URLSearchParams(window.location.search).get("callbackUrl") || "/";
+          window.location.href =
+            new URLSearchParams(window.location.search).get("callbackUrl") || "/";
         }, 1500);
       } else {
         setError(data.error || "邀请码无效");
@@ -122,47 +91,21 @@ export default function ActivatePage() {
               天工
             </h1>
             <p className="text-sm text-zinc-500 mt-1.5">
-              {step === "done" ? "激活成功" : "激活设备"}
+              {step === "done" ? "激活成功" : "请输入邀请码"}
             </p>
           </div>
 
-          {step === "phone" && (
-            <form onSubmit={submitPhone} className="space-y-4">
-              <input
-                ref={inputRef}
-                type="tel"
-                maxLength={11}
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-                placeholder="请输入手机号"
-                className="w-full px-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 text-sm focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all duration-200"
-              />
-              {error && <ErrorBar msg={error} />}
-              <SubmitButton loading={loading} label="下一步" />
-            </form>
-          )}
-
           {step === "code" && (
             <form onSubmit={submitCode} className="space-y-4">
-              <p className="text-xs text-zinc-500 text-center">
-                邀请码已发送，请输入 <span className="text-zinc-400">{phone}</span> 的邀请码
-              </p>
               <input
                 ref={inputRef}
                 type="text"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="TG-XXXX-XXXX-XXXX"
+                placeholder="TG-SUPER-XXXXXXXXXXXX"
                 autoComplete="off"
                 className="w-full px-4 py-3 bg-zinc-950/80 border border-zinc-800 rounded-xl text-zinc-100 placeholder-zinc-600 text-sm font-mono tracking-wider text-center focus:outline-none focus:border-emerald-500/50 focus:ring-2 focus:ring-emerald-500/10 transition-all duration-200"
               />
-              <button
-                type="button"
-                onClick={() => { setStep("phone"); setError(""); setInviteCode(""); }}
-                className="text-xs text-zinc-600 hover:text-zinc-400 block mx-auto transition-colors"
-              >
-                ← 更换手机号
-              </button>
               {error && <ErrorBar msg={error} />}
               <SubmitButton loading={loading} label="激活" />
             </form>

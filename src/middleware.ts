@@ -15,6 +15,11 @@ const BLOCKED_AGENTS = [
 
 function getIp(r: NextRequest) { return r.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || r.headers.get("x-real-ip") || "127.0.0.1"; }
 function nonce() { return crypto.randomBytes(16).toString("base64"); }
+function getExternalBaseUrl(request: NextRequest): string {
+  const proto = request.headers.get("x-forwarded-proto") || "http";
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || "localhost:3000";
+  return `${proto}://${host}`;
+}
 
 function securePublic(res: NextResponse, n: string) {
   res.headers.set("X-Next-Nonce", n);
@@ -95,8 +100,9 @@ export default async function middleware(request: NextRequest) {
 
   // Not authenticated
   if (!session) {
-    const u = new URL("/activate", request.url);
-    u.searchParams.set("callbackUrl", request.url);
+    const baseUrl = getExternalBaseUrl(request);
+    const u = new URL("/activate", baseUrl);
+    u.searchParams.set("callbackUrl", `${baseUrl}${request.nextUrl.pathname}${request.nextUrl.search}`);
     return NextResponse.redirect(u);
   }
 
@@ -113,7 +119,7 @@ export default async function middleware(request: NextRequest) {
   const agentPages = ["/reports", "/signals", "/mobile/reports", "/mobile/signals"];
   if (agentPages.some(p => pathname.startsWith(p))) {
     if (!canViewAgentData(session.role)) {
-      const u = new URL("/mobile", request.url);
+      const u = new URL("/mobile", getExternalBaseUrl(request));
       return NextResponse.redirect(u);
     }
   }
@@ -126,7 +132,7 @@ export default async function middleware(request: NextRequest) {
     if (deviceSession && deviceSession.sub === session.sub) {
       session = deviceSession;
     } else {
-      const u = new URL("/activate", request.url);
+      const u = new URL("/activate", getExternalBaseUrl(request));
       u.searchParams.set("reason", "device_mismatch");
       return NextResponse.redirect(u);
     }
@@ -135,7 +141,7 @@ export default async function middleware(request: NextRequest) {
   // ── Mobile redirect ─────────────────────────────────
 
   if (pathname === "/" && MOBILE_REGEX.test(ua)) {
-    return NextResponse.redirect(new URL("/mobile", request.url));
+    return NextResponse.redirect(new URL("/mobile", getExternalBaseUrl(request)));
   }
 
   // ── Set/refresh cookie + inject user context ────────

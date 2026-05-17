@@ -1,7 +1,7 @@
 #!/bin/bash
 # ~/code/dashboard/scripts/sync-to-ecs.sh
 # Mac → ECS 数据同步：screener.db + reports.db
-# 每小时执行一次（Mac crontab）
+# 每5分钟执行一次（Mac crontab）
 
 set -e
 
@@ -11,9 +11,9 @@ DEST="root@47.93.214.189:/opt/dashboard/data/"
 SSH_KEY="$HOME/.ssh/hermes-ecs"
 LOCKFILE="/tmp/dashboard-sync.lock"
 
-# 防止重叠执行
-exec 200>"$LOCKFILE"
-flock -n 200 || { echo "$(date): sync already running, skipping"; exit 0; }
+# macOS 兼容锁: 用 shlock 替换 flock
+shlock -f "$LOCKFILE" -p $$ || { echo "$(date): sync already running, skipping"; exit 0; }
+trap 'rm -f "$LOCKFILE"' EXIT
 
 echo "$(date): === sync start ==="
 
@@ -32,6 +32,3 @@ ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
   root@47.93.214.189 "pm2 reload dashboard --update-env" 2>/dev/null || true
 
 echo "$(date): === sync done ==="
-
-# 释放锁
-flock -u 200
