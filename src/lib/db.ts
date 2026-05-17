@@ -1,7 +1,14 @@
 import Database from "better-sqlite3";
 import * as path from "path";
 import * as os from "os";
-import { type Report, type MacroScore, type SentimentData, type ThemePoolStock } from "./types";
+import {
+  type Report, type MacroScore, type SentimentData, type ThemePoolStock,
+  type SimPosition, type SimHkPosition, type SimNav, type SimTrade,
+  type QuantPosition, type QuantNav, type QuantTrade, type FactorIC,
+  type LivePosition, type LiveDiagnosis,
+  type RiskOverview, type RiskEvent,
+  type Message, type BenchmarkComparison,
+} from "./types";
 
 const REPORTS_DB = process.env.DASHBOARD_REPORTS_DB || path.join(os.homedir(), "code/dashboard/data/reports.db");
 const SCREENER_DB = process.env.DASHBOARD_SCREENER_DB || path.join(os.homedir(), "code/stock-screener/data/screener.db");
@@ -597,4 +604,165 @@ export function getDailyV2Stats(): { trade_date: string; total: number; dual_sou
      FROM stock_daily_v2
      GROUP BY trade_date ORDER BY trade_date DESC LIMIT 1`
   ).get() as any;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Trading Module — Paper (模拟盘)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get A-share sim positions for a given market+slot */
+export function getPaperPortfolio(market: "a" | "hk", slot?: string): SimPosition[] | SimHkPosition[] {
+  const db = getScreenerDb();
+  if (market === "hk") {
+    if (slot) {
+      return db.prepare(
+        "SELECT * FROM sim_hk_position WHERE slot = ? ORDER BY weight_pct DESC"
+      ).all(slot) as SimHkPosition[];
+    }
+    return db.prepare(
+      "SELECT * FROM sim_hk_position ORDER BY weight_pct DESC"
+    ).all() as SimHkPosition[];
+  }
+  if (slot) {
+    return db.prepare(
+      "SELECT * FROM sim_position WHERE slot = ? ORDER BY weight_pct DESC"
+    ).all(slot) as SimPosition[];
+  }
+  return db.prepare(
+    "SELECT * FROM sim_position ORDER BY weight_pct DESC"
+  ).all() as SimPosition[];
+}
+
+/** Get A-share sim NAV history */
+export function getPaperNav(market: "a" | "hk", limit = 60): SimNav[] {
+  const db = getScreenerDb();
+  const table = market === "hk" ? "sim_hk_nav" : "sim_portfolio_snapshot";
+  return db.prepare(
+    `SELECT trade_date, nav, daily_return, total_pnl, total_invested FROM ${table} ORDER BY trade_date DESC LIMIT ?`
+  ).all(limit) as SimNav[];
+}
+
+/** Get sim trades */
+export function getPaperTrades(market: "a" | "hk", limit = 50): SimTrade[] {
+  const db = getScreenerDb();
+  const table = market === "hk" ? "sim_hk_trades" : "sim_trades";
+  return db.prepare(
+    `SELECT * FROM ${table} ORDER BY trade_date DESC LIMIT ?`
+  ).all(limit) as SimTrade[];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Trading Module — Quant (量化盘)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get quant positions */
+export function getQuantPortfolio(market: "a" | "hk", limit = 20): QuantPosition[] {
+  const db = getScreenerDb();
+  const table = market === "hk" ? "quant_hk_position" : "quant_position";
+  return db.prepare(
+    `SELECT * FROM ${table} ORDER BY weight_pct DESC LIMIT ?`
+  ).all(limit) as QuantPosition[];
+}
+
+/** Get quant NAV history */
+export function getQuantNav(market: "a" | "hk", limit = 60): QuantNav[] {
+  const db = getScreenerDb();
+  const table = market === "hk" ? "quant_hk_nav" : "quant_nav";
+  return db.prepare(
+    `SELECT trade_date, nav, daily_return, benchmark_return FROM ${table} ORDER BY trade_date DESC LIMIT ?`
+  ).all(limit) as QuantNav[];
+}
+
+/** Get quant trades */
+export function getQuantTrades(market: "a" | "hk", limit = 50): QuantTrade[] {
+  const db = getScreenerDb();
+  const table = market === "hk" ? "quant_hk_trades" : "quant_trades";
+  return db.prepare(
+    `SELECT * FROM ${table} ORDER BY trade_date DESC LIMIT ?`
+  ).all(limit) as QuantTrade[];
+}
+
+/** Get factor IC history */
+export function getFactorIC(limit = 30): FactorIC[] {
+  return getScreenerDb().prepare(
+    "SELECT * FROM quant_factor_ic ORDER BY date DESC LIMIT ?"
+  ).all(limit) as FactorIC[];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Trading Module — Live Portfolio (实盘)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get live portfolio positions (desensitized: only weight_pct + pnl_pct) */
+export function getLivePortfolio(): LivePosition[] {
+  return getDb().prepare(
+    "SELECT symbol, weight_pct, pnl_pct, sector FROM live_portfolio ORDER BY weight_pct DESC"
+  ).all() as LivePosition[];
+}
+
+/** Get live portfolio diagnosis metrics */
+export function getLiveDiagnosis(): LiveDiagnosis[] {
+  return getScreenerDb().prepare(
+    "SELECT metric, value, status FROM portfolio_diagnosis ORDER BY metric"
+  ).all() as LiveDiagnosis[];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Trading Module — Risk (风控)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get unified risk overview */
+export function getRiskOverview(): RiskOverview | null {
+  return (getScreenerDb().prepare(
+    "SELECT * FROM risk_metrics ORDER BY update_time DESC LIMIT 1"
+  ).get() as RiskOverview) || null;
+}
+
+/** Get recent risk events / drawdown alerts */
+export function getRiskEvents(limit = 20): RiskEvent[] {
+  return getScreenerDb().prepare(
+    "SELECT * FROM sim_drawdown_alerts ORDER BY date DESC LIMIT ?"
+  ).all(limit) as RiskEvent[];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Trading Module — Messages (消息)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get messages, optionally filtered by type */
+export function getMessages(type?: string, limit = 50): Message[] {
+  const db = getScreenerDb();
+  if (type) {
+    return db.prepare(
+      "SELECT * FROM messages WHERE type = ? ORDER BY created_at DESC LIMIT ?"
+    ).all(type, limit) as Message[];
+  }
+  return db.prepare(
+    "SELECT * FROM messages ORDER BY created_at DESC LIMIT ?"
+  ).all(limit) as Message[];
+}
+
+/** Get single message by id */
+export function getMessageById(id: number): Message | null {
+  return (getScreenerDb().prepare(
+    "SELECT * FROM messages WHERE id = ?"
+  ).get(id) as Message) || null;
+}
+
+/** Mark a message as read */
+export function markMessageRead(id: number): void {
+  getScreenerDb().prepare(
+    "UPDATE messages SET is_read = 1 WHERE id = ?"
+  ).run(id);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Trading Module — Benchmark Comparison (基准)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get benchmark comparison data */
+export function getBenchmarkComparison(): BenchmarkComparison[] {
+  return getScreenerDb().prepare(
+    "SELECT * FROM benchmark_comparison ORDER BY CASE period WHEN '1周' THEN 1 WHEN '1月' THEN 2 WHEN '3月' THEN 3 WHEN '6月' THEN 4 WHEN '1年' THEN 5 ELSE 6 END"
+  ).all() as BenchmarkComparison[];
 }

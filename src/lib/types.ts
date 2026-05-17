@@ -69,3 +69,161 @@ export interface EtfFlowItem {
   pct_change: number;
   fund_size: number;
 }
+
+// ─── Trading Module Types ──────────────────────────────
+
+/** A-share sim position */
+export interface SimPosition {
+  symbol: string;
+  name: string;
+  shares: number;
+  cost_price: number;
+  current_price: number;
+  market_value: number;
+  pnl: number;
+  pnl_pct: number;
+  weight_pct: number;
+  update_time: string;
+}
+
+/** HK sim position */
+export interface SimHkPosition {
+  symbol: string;
+  name: string;
+  shares: number;
+  cost_price: number;
+  current_price: number;
+  market_value: number;
+  pnl: number;
+  pnl_pct: number;
+  weight_pct: number;
+  update_time: string;
+}
+
+/** Sim portfolio snapshot (NAV) */
+export interface SimNav {
+  trade_date: string;
+  nav: number;
+  daily_return: number;
+  total_pnl: number;
+  total_invested: number;
+}
+
+/** Sim trade record */
+export interface SimTrade {
+  trade_date: string;
+  symbol: string;
+  name: string;
+  direction: string;      // buy/sell
+  price: number;
+  shares: number;
+  amount: number;
+  pnl: number | null;
+}
+
+/** Quant position */
+export interface QuantPosition {
+  symbol: string;
+  name: string;
+  weight_pct: number;
+  sector: string;
+  factor_score: number;
+  expected_return: number;
+}
+
+/** Quant NAV */
+export interface QuantNav {
+  trade_date: string;
+  nav: number;
+  daily_return: number;
+  benchmark_return: number;
+}
+
+/** Quant trade */
+export interface QuantTrade {
+  trade_date: string;
+  symbol: string;
+  name: string;
+  direction: string;
+  price: number;
+  shares: number;
+  amount: number;
+  reason: string | null;
+}
+
+/** Factor IC */
+export interface FactorIC {
+  date: string;
+  factor_name: string;
+  ic: number;
+  rank_ic: number;
+  significance: string;
+}
+
+/** Live portfolio (desensitized) */
+export interface LivePosition {
+  symbol: string;
+  weight_pct: number;
+  pnl_pct: number;
+  sector: string;
+}
+
+/** Live portfolio diagnosis */
+export interface LiveDiagnosis {
+  metric: string;
+  value: number;
+  status: "good" | "warning" | "danger";
+}
+
+/** Risk overview */
+export interface RiskOverview {
+  total_drawdown_pct: number;
+  current_drawdown_pct: number;
+  var_95: number;
+  volatility: number;
+  sharpe: number;
+  max_consecutive_losses: number;
+  update_time: string;
+}
+
+/** Risk event / drawdown alert */
+export interface RiskEvent {
+  id: number;
+  date: string;
+  type: string;
+  severity: string;
+  symbol: string | null;
+  message: string;
+  metric_value: number;
+  threshold: number;
+  acknowledged: number;
+}
+
+/** Message */
+export interface Message {
+  id: number;
+  type: string;
+  title: string;
+  content: string;
+  is_read: number;
+  created_at: string;
+}
+
+/** Benchmark comparison */
+export interface BenchmarkComparison {
+  period: string;
+  portfolio_return: number;
+  benchmark_return: number;
+  alpha: number;
+  tracking_error: number;
+  information_ratio: number;
+}
+
+/** Paper portfolio summary */
+export interface PaperPortfolio {
+  total_market_value: number;
+  total_pnl: number;
+  total_pnl_pct: number;
+  position_count: number;
+  positions: SimPosition[] | SimHkPosition[];
+}
