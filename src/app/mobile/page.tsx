@@ -13,6 +13,7 @@ import {
   getLhbTop,
   getLatestFutures,
   getHsgtByDirection,
+  getHsgtStockTop,
 } from "@/lib/db";
 import { MobileDashboardClient } from "./MobileDashboardClient";
 import { safeJsonParse } from "@/lib/utils";
@@ -180,6 +181,13 @@ export default function MobileDashboardPage() {
     return first && last ? ((last - first) / first * 100) : null;
   })();
 
+  // North-bound stock TOP10 (from hsgt_stock_daily)
+  const northStocks = getHsgtStockTop("北向", undefined, 10);
+  const northTotalInflow = northStocks.reduce((sum, s) => sum + (s.net_inflow || 0), 0);
+  // South-bound stock TOP10
+  const southStocks = getHsgtStockTop("南向", undefined, 10);
+  const southTotalInflow = southStocks.reduce((sum, s) => sum + (s.net_inflow || 0), 0);
+
   // M7: KWEB + futures
   const kwebPct = indexPct("KWEB", true).pct;
   const futuresData = getLatestFutures(["CU0", "AU0", "SC0"]);
@@ -250,7 +258,18 @@ export default function MobileDashboardPage() {
         symbol: r.symbol, name: r.name,
         pct_change: r.pct_change, net_amount: r.net_amount,
       }))}
-      // M7
+      // M5: 北向
+      northStocks={northStocks.map(s => ({
+        symbol: s.symbol, rank: s.rank,
+        net_inflow: s.net_inflow, change_pct: s.change_pct,
+      }))}
+      northTotalInflow={northTotalInflow}
+      southStocks={southStocks.map(s => ({
+        symbol: s.symbol, rank: s.rank,
+        net_inflow: s.net_inflow, change_pct: s.change_pct,
+      }))}
+      southTotalInflow={southTotalInflow}
+      // M6
       kwebPct={kwebPct}
       futures={futures}
       // M8/M9

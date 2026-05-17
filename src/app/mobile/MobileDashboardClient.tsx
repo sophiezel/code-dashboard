@@ -5,7 +5,7 @@ import { SparklineChart } from "@/components/mobile/sparkline";
 import { BarChart } from "@/components/mobile/bar-chart";
 import {
   TrendingUp, Activity, Globe, DollarSign,
-  Ship, Waves, Target, Compass, AlertTriangle,
+  Ship, Waves, Target, Compass, ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ThemePool } from "@/lib/types";
@@ -17,6 +17,7 @@ interface ReportSummary {
 interface IndexSnapshot { label: string; pct: number | null; }
 interface LhbStock { symbol: string; name: string; pct_change: number; net_amount: number; }
 interface FuturesSnapshot { label: string; pct: number | null; close: number | null; }
+interface NorthStock { symbol: string; rank: number; net_inflow: number; change_pct: number; }
 
 interface Decision {
   regime: string; regimeEmoji: string;
@@ -47,7 +48,7 @@ interface Props {
   // M3
   domesticIndices: IndexSnapshot[];
   globalIndices: IndexSnapshot[];
-  // M4 (merged)
+  // M4: 资金全景
   marginBalance: number | null;
   marginChartData: number[];
   shortBalance: number | null;
@@ -55,10 +56,16 @@ interface Props {
   southNetBuy: number | null;
   southChartData: number[];
   lhbTop5: LhbStock[];
-  // M7 (was old M7, now M6)
+  // M5: 北向资金 (restored)
+  northStocks: NorthStock[];
+  northTotalInflow: number;
+  // South stocks (matching north format)
+  southStocks: NorthStock[];
+  southTotalInflow: number;
+  // M6: 外围市场
   kwebPct: number | null;
   futures: FuturesSnapshot[];
-  // M8/M9 (was old M8/M9, now M7/M8)
+  // M7/M8: 主线/潜力
   themePool: ThemePool[];
   // Reports
   latestPicks: ReportSummary | null;
@@ -81,16 +88,16 @@ export function MobileDashboardClient(props: Props) {
   const {
     decision,
     macroScore, macroPosition,
-    macroIndicatorKeys, macroIndicatorValues,
-    macroChartData,
+    macroIndicatorKeys, macroIndicatorValues, macroChartData,
     sentimentScore, sentimentLimitUp, sentimentLimitUpRate,
     sentimentAlert, advDeclRatio, bustRate,
     sentimentChartData, vixClose,
     domesticIndices, globalIndices,
     marginBalance, marginChartData,
     shortBalance, marginTrend,
-    southNetBuy, southChartData,
-    lhbTop5,
+    southNetBuy, southChartData, lhbTop5,
+    northStocks, northTotalInflow,
+    southStocks, southTotalInflow,
     kwebPct, futures,
     themePool,
     latestPicks, latestBuy, latestReview,
@@ -107,7 +114,6 @@ export function MobileDashboardClient(props: Props) {
 
   const macroKeysUpper = macroIndicatorKeys.map(k => k.toUpperCase());
 
-  // ── Decision banner style ──
   const decisionBg = decision.regime === "进攻" ? "bg-emerald-500/10 border-emerald-500/30"
     : decision.regime === "防御" ? "bg-amber-500/10 border-amber-500/30"
     : "bg-rose-500/10 border-rose-500/30";
@@ -134,39 +140,26 @@ export function MobileDashboardClient(props: Props) {
       </div>
 
       {/* ──── M1: 宏观评分 ──── */}
-      <ModuleCard
-        label="M1" title="宏观评分" accent="emerald"
+      <ModuleCard label="M1" title="宏观评分" accent="emerald"
         icon={<TrendingUp className="w-3.5 h-3.5 text-emerald-400" />}
-        metric={macroScore?.toFixed(0) ?? "--"}
-        metricSub={macroMetricSub}
+        metric={macroScore?.toFixed(0) ?? "--"} metricSub={macroMetricSub}
         subMetrics={
           macroKeysUpper.length > 0
             ? macroKeysUpper.slice(0, 4).map((k, i) => ({
-                label: k,
-                value: macroIndicatorValues[i]?.toFixed(1) ?? "--",
-                color: "emerald" as const,
+                label: k, value: macroIndicatorValues[i]?.toFixed(1) ?? "--", color: "emerald" as const,
               }))
             : undefined
         }
-        chart={
-          macroChartData.length >= 2 ? (
-            <SparklineChart data={macroChartData.slice(-30)} color="#10b981" height={28} className="w-full h-7" />
-          ) : undefined
-        }
+        chart={macroChartData.length >= 2 ? <SparklineChart data={macroChartData.slice(-30)} color="#10b981" height={28} className="w-full h-7" /> : undefined}
         href="/mobile/macro"
       />
 
       {/* ──── M2: 市场情绪 ──── */}
-      <ModuleCard
-        label="M2" title="市场情绪"
+      <ModuleCard label="M2" title="市场情绪"
         accent={sentimentScore && sentimentScore >= 60 ? "emerald" : sentimentScore && sentimentScore >= 40 ? "amber" : "rose"}
         icon={<Activity className="w-3.5 h-3.5" />}
         metric={sentimentScore ?? "--"}
-        metricSub={
-          sentimentScore !== null
-            ? sentimentScore >= 60 ? "乐观" : sentimentScore >= 40 ? "中性" : "悲观"
-            : undefined
-        }
+        metricSub={sentimentScore !== null ? (sentimentScore >= 60 ? "乐观" : sentimentScore >= 40 ? "中性" : "悲观") : undefined}
         badge={sentimentAlert || undefined}
         subMetrics={[
           { label: "涨停", value: `${sentimentLimitUp}家`, color: "emerald" as const },
@@ -175,42 +168,31 @@ export function MobileDashboardClient(props: Props) {
           { label: "炸板率", value: bustRate != null ? `${(bustRate * 100).toFixed(0)}%` : "--", color: bustRate != null && bustRate > 0.3 ? "rose" as const : "emerald" as const },
           { label: "VIX", value: vixClose?.toFixed(1) ?? "--", color: vixClose && vixClose > 25 ? "rose" as const : "emerald" as const },
         ]}
-        chart={
-          sentimentChartData.length >= 2 ? (
-            <SparklineChart data={sentimentChartData.slice(-30)} color={sentimentColor} height={28} className="w-full h-7" />
-          ) : undefined
-        }
+        chart={sentimentChartData.length >= 2 ? <SparklineChart data={sentimentChartData.slice(-30)} color={sentimentColor} height={28} className="w-full h-7" /> : undefined}
         href="/mobile/sentiment"
       />
 
       {/* ──── M3: 指数快览 ──── */}
-      <ModuleCard
-        label="M3" title="指数快览" accent="blue"
+      <ModuleCard label="M3" title="指数快览" accent="blue"
         icon={<Globe className="w-3.5 h-3.5 text-blue-400" />}
         body={
           <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-center">
             {domesticIndices.slice(0, 3).map(di => (
               <div key={di.label} className="text-xs">
                 <span className="text-zinc-500 block text-[10px]">{di.label}</span>
-                <span className={cn("font-semibold tabular-nums", di.pct != null && di.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                  {pctText(di.pct)}
-                </span>
+                <span className={cn("font-semibold tabular-nums", di.pct != null && di.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(di.pct)}</span>
               </div>
             ))}
             {domesticIndices.slice(3, 5).map(di => (
               <div key={di.label} className="text-xs">
                 <span className="text-zinc-500 block text-[10px]">{di.label}</span>
-                <span className={cn("font-semibold tabular-nums", di.pct != null && di.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                  {pctText(di.pct)}
-                </span>
+                <span className={cn("font-semibold tabular-nums", di.pct != null && di.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(di.pct)}</span>
               </div>
             ))}
             {globalIndices.slice(0, 1).map(gi => (
               <div key={gi.label} className="text-xs">
                 <span className="text-zinc-500 block text-[10px]">{gi.label}</span>
-                <span className={cn("font-semibold tabular-nums", gi.pct != null && gi.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                  {pctText(gi.pct)}
-                </span>
+                <span className={cn("font-semibold tabular-nums", gi.pct != null && gi.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(gi.pct)}</span>
               </div>
             ))}
           </div>
@@ -219,60 +201,94 @@ export function MobileDashboardClient(props: Props) {
       />
 
       {/* ──── M4: 资金全景 ──── */}
-      <ModuleCard
-        label="M4" title="资金全景" accent="amber"
+      <ModuleCard label="M4" title="两融资金" accent="amber"
         icon={<DollarSign className="w-3.5 h-3.5 text-amber-400" />}
         subMetrics={[
           { label: "两融", value: marginBalance != null ? `${(marginBalance / 1e8).toFixed(0)}亿` : "--", color: "amber" as const },
           { label: "融券", value: shortBalance != null ? `${(shortBalance / 1e8).toFixed(0)}亿` : "--", color: "rose" as const },
           { label: "周趋势", value: marginTrend != null ? `${marginTrend >= 0 ? "+" : ""}${marginTrend.toFixed(1)}%` : "--", color: marginTrend != null && marginTrend > 0 ? "emerald" as const : "rose" as const },
-          { label: "南向", value: formatBillions(southNetBuy), color: southNetBuy != null && southNetBuy >= 0 ? "emerald" as const : "rose" as const },
           ...(lhbTop5.length > 0 ? [{ label: "龙虎榜", value: lhbTop5[0].name, color: "violet" as const }] : []),
         ]}
-        chart={
-          marginChartData.length >= 2 ? (
-            <SparklineChart data={marginChartData.slice(-60)} color="#f59e0b" height={28} className="w-full h-7" />
-          ) : undefined
+        chart={marginChartData.length >= 2 ? <SparklineChart data={marginChartData.slice(-60)} color="#f59e0b" height={28} className="w-full h-7" /> : undefined}
+        href="/mobile/flow"
+      />
+
+      {/* ──── M5: 北向/南向资金 ──── */}
+      <ModuleCard label="M5" title="资金流向" accent="blue"
+        icon={<ArrowUpDown className="w-3.5 h-3.5 text-blue-400" />}
+        body={
+          <div className="space-y-2">
+            {/* 北向 */}
+            <div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-[10px] text-zinc-500">北向</span>
+                <span className="text-sm font-bold tabular-nums text-blue-400">{formatBillions(northTotalInflow)}</span>
+                <span className="text-[9px] text-zinc-600">持股市值变化</span>
+              </div>
+              {northStocks.length > 0 ? (
+                <div className="space-y-0.5">
+                  {northStocks.slice(0, 3).map(s => (
+                    <div key={s.symbol} className="flex items-center gap-2 text-[10px]">
+                      <span className="font-mono text-zinc-500 w-10">{s.symbol}</span>
+                      <span className={cn("tabular-nums", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatBillions(s.net_inflow)}</span>
+                      <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <span className="text-[9px] text-zinc-600">回补中</span>}
+            </div>
+            {/* 分隔 */}
+            <div className="border-t border-zinc-800/50" />
+            {/* 南向 */}
+            <div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-[10px] text-zinc-500">南向</span>
+                <span className="text-sm font-bold tabular-nums text-violet-400">{formatBillions(southTotalInflow)}</span>
+                <span className="text-[9px] text-zinc-600">持股市值变化</span>
+              </div>
+              {southStocks.length > 0 ? (
+                <div className="space-y-0.5">
+                  {southStocks.slice(0, 3).map(s => (
+                    <div key={s.symbol} className="flex items-center gap-2 text-[10px]">
+                      <span className="font-mono text-zinc-500 w-10">{s.symbol}</span>
+                      <span className={cn("tabular-nums", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatBillions(s.net_inflow)}</span>
+                      <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : <span className="text-[9px] text-zinc-600">回补中</span>}
+            </div>
+          </div>
         }
         href="/mobile/flow"
       />
 
-      {/* ──── M5 (was M7): 外围市场 ──── */}
-      <ModuleCard
-        label="M5" title="外围市场" accent="cyan"
+      {/* ──── M6: 外围市场 ──── */}
+      <ModuleCard label="M6" title="外围市场" accent="cyan"
         icon={<Waves className="w-3.5 h-3.5 text-cyan-400" />}
         body={
           <div className="grid grid-cols-3 gap-x-3 text-center">
             <div className="text-xs">
               <span className="text-zinc-500 block text-[10px]">中概互联</span>
-              <span className={cn("font-semibold tabular-nums", kwebPct != null && kwebPct >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                {pctText(kwebPct)}
-              </span>
+              <span className={cn("font-semibold tabular-nums", kwebPct != null && kwebPct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(kwebPct)}</span>
             </div>
             {futures.map(f => (
               <div key={f.label} className="text-xs">
                 <span className="text-zinc-500 block text-[10px]">{f.label}</span>
-                <span className={cn("font-semibold tabular-nums", f.pct != null && f.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
-                  {pctText(f.pct)}
-                </span>
+                <span className={cn("font-semibold tabular-nums", f.pct != null && f.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(f.pct)}</span>
               </div>
             ))}
           </div>
         }
       />
 
-      {/* ──── M6 (was M8): 主线板块 ──── */}
-      <ModuleCard
-        label="M6" title="主线板块" accent="emerald"
+      {/* ──── M7: 主线板块 ──── */}
+      <ModuleCard label="M7" title="主线板块" accent="emerald"
         icon={<Target className="w-3.5 h-3.5 text-emerald-400" />}
         subMetrics={themePool.length > 0
           ? themePool.slice(0, 3).map(t => {
               const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
-              return {
-                label: t.theme,
-                value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--",
-                color: "emerald" as const,
-              };
+              return { label: t.theme, value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--", color: "emerald" as const };
             })
           : undefined
         }
@@ -280,27 +296,18 @@ export function MobileDashboardClient(props: Props) {
         href="/mobile/sectors"
       />
 
-      {/* ──── M7 (was M9): 潜力主线 ──── */}
-      <ModuleCard
-        label="M7" title="潜力主线" accent="amber"
+      {/* ──── M8: 潜力主线 ──── */}
+      <ModuleCard label="M8" title="潜力主线" accent="amber"
         icon={<Compass className="w-3.5 h-3.5 text-amber-400" />}
         subMetrics={themePool.length > 3
           ? themePool.slice(3, 6).map(t => {
               const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
-              return {
-                label: t.theme,
-                value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--",
-                color: "amber" as const,
-              };
+              return { label: t.theme, value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--", color: "amber" as const };
             })
           : themePool.length > 0
           ? themePool.slice(0, 3).map(t => {
               const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
-              return {
-                label: t.theme,
-                value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--",
-                color: "amber" as const,
-              };
+              return { label: t.theme, value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--", color: "amber" as const };
             })
           : undefined
         }
@@ -308,7 +315,7 @@ export function MobileDashboardClient(props: Props) {
         href="/mobile/sectors"
       />
 
-      {/* ──── 最新信号 (升级版) ──── */}
+      {/* ──── 最新信号 ──── */}
       {(latestPicks || latestBuy) && (
         <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/[0.02] p-3">
           <p className="text-[10px] font-semibold text-emerald-400/80 mb-2 flex items-center gap-1.5">
