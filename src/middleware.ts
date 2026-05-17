@@ -163,4 +163,4 @@ export default async function middleware(request: NextRequest) {
   return res;
 }
 
-export const config = { matcher: ["/((?!_next/static|_next/image).*)"] };
+export const config = { matcher: ["/((?!_next/static|_next/image|api/data/sync|api/data/reload).*)"] };
