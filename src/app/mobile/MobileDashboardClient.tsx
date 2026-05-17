@@ -1,275 +1,346 @@
 "use client";
 
-import { useState } from "react";
-import { HeroCard } from "@/components/mobile/hero-card";
-import { KpiGrid } from "@/components/mobile/kpi-grid";
-import { IndexBar } from "@/components/mobile/index-bar";
-import { ReportRow } from "@/components/mobile/report-row";
+import { ModuleCard } from "@/components/mobile/module-card";
 import { SparklineChart } from "@/components/mobile/sparkline";
-import { MacroRing } from "@/components/mobile/macro-ring";
+import { BarChart } from "@/components/mobile/bar-chart";
 import {
-  TrendingUp, Zap, ShieldAlert, Activity, FileText,
+  TrendingUp, Activity, Globe, DollarSign,
+  Ship, Waves, Target, Compass, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { ThemePool } from "@/lib/types";
 
 interface ReportSummary {
   id: number; type: string; title: string; preview: string; created_at: string;
 }
 
+interface IndexSnapshot { label: string; pct: number | null; }
+interface LhbStock { symbol: string; name: string; pct_change: number; net_amount: number; }
+interface FuturesSnapshot { label: string; pct: number | null; close: number | null; }
+
+interface Decision {
+  regime: string; regimeEmoji: string;
+  positionPct: number;
+  reason: string;
+  focusThemes: string[];
+}
+
 interface Props {
+  // Decision
+  decision: Decision;
+  // M1
   macroScore: number | null;
   macroPosition: number | null;
   macroDate: string | null;
-  indicatorKeys: string[];
-  indicatorValues: number[];
+  macroIndicatorKeys: string[];
+  macroIndicatorValues: number[];
+  macroChartData: number[];
+  // M2
   sentimentScore: number | null;
   sentimentLimitUp: number;
   sentimentLimitUpRate: number;
-  detailKeys: string[];
-  detailValues: string[];
-  recentReports: ReportSummary[];
+  sentimentAlert: string | null;
+  advDeclRatio: number | null;
+  bustRate: number | null;
+  sentimentChartData: number[];
+  vixClose: number | null;
+  // M3
+  domesticIndices: IndexSnapshot[];
+  globalIndices: IndexSnapshot[];
+  // M4 (merged)
+  marginBalance: number | null;
+  marginChartData: number[];
+  shortBalance: number | null;
+  marginTrend: number | null;
+  southNetBuy: number | null;
+  southChartData: number[];
+  lhbTop5: LhbStock[];
+  // M7 (was old M7, now M6)
+  kwebPct: number | null;
+  futures: FuturesSnapshot[];
+  // M8/M9 (was old M8/M9, now M7/M8)
+  themePool: ThemePool[];
+  // Reports
   latestPicks: ReportSummary | null;
   latestBuy: ReportSummary | null;
   latestReview: ReportSummary | null;
-  macroChartData: number[];
-  sentimentChartData: number[];
 }
 
-type SlideTab = "macro" | "sentiment";
+function formatBillions(n: number | null): string {
+  if (n == null) return "--";
+  const b = n / 1e8;
+  return `${b >= 0 ? "+" : ""}${b.toFixed(1)}亿`;
+}
+
+function pctText(n: number | null): string {
+  if (n == null) return "--";
+  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+}
 
 export function MobileDashboardClient(props: Props) {
   const {
+    decision,
     macroScore, macroPosition,
-    indicatorKeys, indicatorValues,
+    macroIndicatorKeys, macroIndicatorValues,
+    macroChartData,
     sentimentScore, sentimentLimitUp, sentimentLimitUpRate,
-    detailKeys, detailValues,
-    recentReports, latestPicks, latestBuy, latestReview,
-    macroChartData, sentimentChartData,
+    sentimentAlert, advDeclRatio, bustRate,
+    sentimentChartData, vixClose,
+    domesticIndices, globalIndices,
+    marginBalance, marginChartData,
+    shortBalance, marginTrend,
+    southNetBuy, southChartData,
+    lhbTop5,
+    kwebPct, futures,
+    themePool,
+    latestPicks, latestBuy, latestReview,
   } = props;
-
-  const [activeTab, setActiveTab] = useState<SlideTab>("macro");
 
   const sentimentColor =
     sentimentScore !== null && sentimentScore >= 60 ? "#10b981"
     : sentimentScore !== null && sentimentScore >= 40 ? "#f59e0b"
     : "#ef4444";
 
-  // Build KPI detail component
-  const kpiDetail = detailKeys.length > 0 ? (
-    <div className="space-y-1">
-      {detailKeys.slice(0, 6).map((key, i) => (
-        <div key={key} className="flex justify-between text-[11px]">
-          <span className="text-zinc-500">{key}</span>
-          <span className="text-zinc-300 tabular-nums font-medium">{detailValues[i] ?? ""}</span>
-        </div>
-      ))}
-    </div>
-  ) : undefined;
+  const macroMetricSub = macroPosition !== null
+    ? `/100 · 仓位${(macroPosition * 100).toFixed(0)}%`
+    : "/100";
 
-  // Build indicator cells for macro tab
-  const macroIndicatorCells = indicatorKeys.length > 0 ? (
-    <div className="grid grid-cols-3 gap-2">
-      {indicatorKeys.map((key, i) => (
-        <div key={key} className="rounded-lg bg-zinc-800/50 p-2 text-center">
-          <span className="text-[9px] text-zinc-500 uppercase block">{key}</span>
-          <span className="text-sm font-bold tabular-nums text-zinc-200">
-            {indicatorValues[i]?.toFixed(1) ?? "—"}
-          </span>
-        </div>
-      ))}
-    </div>
-  ) : null;
+  const macroKeysUpper = macroIndicatorKeys.map(k => k.toUpperCase());
 
-  // Build detail cells for sentiment tab
-  const sentimentDetailCells = detailKeys.length > 0 ? (
-    <div className="grid grid-cols-2 gap-2">
-      {detailKeys.slice(0, 6).map((key, i) => (
-        <div key={key} className="rounded-lg bg-zinc-800/50 p-2">
-          <span className="text-[9px] text-zinc-500 block">{key}</span>
-          <span className="text-sm font-bold tabular-nums text-zinc-200">{detailValues[i] ?? "—"}</span>
-        </div>
-      ))}
-    </div>
-  ) : null;
+  // ── Decision banner style ──
+  const decisionBg = decision.regime === "进攻" ? "bg-emerald-500/10 border-emerald-500/30"
+    : decision.regime === "防御" ? "bg-amber-500/10 border-amber-500/30"
+    : "bg-rose-500/10 border-rose-500/30";
+  const decisionText = decision.regime === "进攻" ? "text-emerald-400"
+    : decision.regime === "防御" ? "text-amber-400"
+    : "text-rose-400";
 
   return (
-    <div className="space-y-4 pb-2">
-      <HeroCard
-        macroScore={macroScore}
-        macroPosition={macroPosition}
-        sentimentScore={sentimentScore}
-        sentimentLabel={
+    <div className="space-y-2 pb-2">
+      {/* ════════ Decision Banner ════════ */}
+      <div className={cn("rounded-xl border p-3", decisionBg)}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-lg">{decision.regimeEmoji}</span>
+          <span className={cn("text-sm font-bold", decisionText)}>
+            {decision.regime} · 仓位 {decision.positionPct}%
+          </span>
+        </div>
+        <p className="text-[10px] text-zinc-400 leading-relaxed">{decision.reason}</p>
+        {decision.focusThemes.length > 0 && (
+          <p className="text-[10px] text-zinc-500 mt-1">
+            关注: {decision.focusThemes.join(" · ")}
+          </p>
+        )}
+      </div>
+
+      {/* ──── M1: 宏观评分 ──── */}
+      <ModuleCard
+        label="M1" title="宏观评分" accent="emerald"
+        icon={<TrendingUp className="w-3.5 h-3.5 text-emerald-400" />}
+        metric={macroScore?.toFixed(0) ?? "--"}
+        metricSub={macroMetricSub}
+        subMetrics={
+          macroKeysUpper.length > 0
+            ? macroKeysUpper.slice(0, 4).map((k, i) => ({
+                label: k,
+                value: macroIndicatorValues[i]?.toFixed(1) ?? "--",
+                color: "emerald" as const,
+              }))
+            : undefined
+        }
+        chart={
+          macroChartData.length >= 2 ? (
+            <SparklineChart data={macroChartData.slice(-30)} color="#10b981" height={28} className="w-full h-7" />
+          ) : undefined
+        }
+        href="/mobile/macro"
+      />
+
+      {/* ──── M2: 市场情绪 ──── */}
+      <ModuleCard
+        label="M2" title="市场情绪"
+        accent={sentimentScore && sentimentScore >= 60 ? "emerald" : sentimentScore && sentimentScore >= 40 ? "amber" : "rose"}
+        icon={<Activity className="w-3.5 h-3.5" />}
+        metric={sentimentScore ?? "--"}
+        metricSub={
           sentimentScore !== null
             ? sentimentScore >= 60 ? "乐观" : sentimentScore >= 40 ? "中性" : "悲观"
             : undefined
         }
-      />
-
-      <IndexBar />
-
-      <KpiGrid
-        items={[
-          {
-            icon: <TrendingUp className="w-4 h-4" />,
-            label: "宏观评分",
-            value: macroScore !== null ? macroScore.toFixed(0) : "--",
-            subtitle: `仓位${macroPosition !== null ? (macroPosition * 100).toFixed(0) : "--"}%`,
-            color: "emerald" as const,
-          },
-          {
-            icon: <Zap className="w-4 h-4" />,
-            label: "涨停家数",
-            value: sentimentLimitUp,
-            subtitle: `${(sentimentLimitUpRate * 100).toFixed(1)}%`,
-            color: "amber" as const,
-          },
-          {
-            icon: <ShieldAlert className="w-4 h-4" />,
-            label: "持仓建议",
-            value: macroPosition !== null ? `${(macroPosition * 100).toFixed(0)}%` : "--",
-            subtitle: latestReview ? "已复盘" : "待复盘",
-            color: "violet" as const,
-          },
-          {
-            icon: <Activity className="w-4 h-4" />,
-            label: "情绪指数",
-            value: sentimentScore ?? "--",
-            subtitle: sentimentScore !== null
-              ? sentimentScore >= 60 ? "🟢 乐观" : sentimentScore >= 40 ? "🟡 中性" : "🔴 悲观"
-              : "--",
-            color: (sentimentScore !== null
-              ? sentimentScore >= 60 ? "emerald" : sentimentScore >= 40 ? "amber" : "rose"
-              : "blue") as "emerald" | "amber" | "rose" | "blue",
-            detail: kpiDetail,
-          },
+        badge={sentimentAlert || undefined}
+        subMetrics={[
+          { label: "涨停", value: `${sentimentLimitUp}家`, color: "emerald" as const },
+          { label: "涨停率", value: `${(sentimentLimitUpRate * 100).toFixed(1)}%`, color: sentimentLimitUpRate > 0.04 ? "rose" as const : "amber" as const },
+          { label: "涨跌比", value: advDeclRatio != null ? advDeclRatio.toFixed(2) : "--", color: advDeclRatio != null && advDeclRatio > 2 ? "emerald" as const : advDeclRatio != null && advDeclRatio < 0.5 ? "rose" as const : "amber" as const },
+          { label: "炸板率", value: bustRate != null ? `${(bustRate * 100).toFixed(0)}%` : "--", color: bustRate != null && bustRate > 0.3 ? "rose" as const : "emerald" as const },
+          { label: "VIX", value: vixClose?.toFixed(1) ?? "--", color: vixClose && vixClose > 25 ? "rose" as const : "emerald" as const },
         ]}
+        chart={
+          sentimentChartData.length >= 2 ? (
+            <SparklineChart data={sentimentChartData.slice(-30)} color={sentimentColor} height={28} className="w-full h-7" />
+          ) : undefined
+        }
+        href="/mobile/sentiment"
       />
 
-      {/* Slide Tabs */}
-      <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/50 overflow-hidden">
-        <div className="flex border-b border-zinc-800/60">
-          {(["macro", "sentiment"] as SlideTab[]).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={cn(
-                "flex-1 py-3 text-xs font-semibold transition-colors relative",
-                activeTab === tab ? "text-emerald-400" : "text-zinc-500"
-              )}
-            >
-              {tab === "macro" ? "宏观评分" : "市场情绪"}
-              {activeTab === tab && (
-                <div className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-emerald-400 rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
-
-        <div className="p-4">
-          {activeTab === "macro" && (
-            <div className="space-y-3">
-              {macroScore !== null ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <MacroRing score={macroScore} size={56} strokeWidth={5} />
-                    <div>
-                      <p className="text-xs text-zinc-500">最新评分</p>
-                      <p className="text-xl font-bold text-emerald-400 tabular-nums">
-                        {macroScore.toFixed(0)}
-                        <span className="text-xs text-zinc-500 font-normal">/100</span>
-                      </p>
-                    </div>
-                    <div className="ml-auto text-right">
-                      <p className="text-xs text-zinc-500">建议仓位</p>
-                      <p className="text-lg font-bold text-amber-400 tabular-nums">
-                        {macroPosition !== null ? (macroPosition * 100).toFixed(0) : "—"}%
-                      </p>
-                    </div>
-                  </div>
-                  {macroIndicatorCells}
-                  {macroChartData.length >= 2 && (
-                    <SparklineChart data={macroChartData} color="#10b981" height={48} className="w-full h-12" />
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-zinc-500 text-center py-4">暂无宏观数据</p>
-              )}
-            </div>
-          )}
-
-          {activeTab === "sentiment" && (
-            <div className="space-y-3">
-              {sentimentScore !== null ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <MacroRing score={sentimentScore} size={56} strokeWidth={5} color={sentimentColor} />
-                    <div>
-                      <p className="text-xs text-zinc-500">情绪指数</p>
-                      <p className="text-xl font-bold tabular-nums" style={{ color: sentimentColor }}>
-                        {sentimentScore}
-                        <span className="text-xs text-zinc-500 font-normal">/100</span>
-                      </p>
-                    </div>
-                    <div className="ml-auto text-right">
-                      <p className="text-xs text-zinc-500">涨停/涨停率</p>
-                      <p className="text-lg font-bold tabular-nums text-emerald-400">
-                        {sentimentLimitUp}
-                        <span className="text-xs text-zinc-500 font-normal">
-                          /{(sentimentLimitUpRate * 100).toFixed(1)}%
-                        </span>
-                      </p>
-                    </div>
-                  </div>
-                  {sentimentDetailCells}
-                  {sentimentChartData.length >= 2 && (
-                    <SparklineChart data={sentimentChartData} color={sentimentColor} height={48} className="w-full h-12" />
-                  )}
-                </>
-              ) : (
-                <p className="text-xs text-zinc-500 text-center py-4">暂无情绪数据</p>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {(latestPicks || latestBuy) && (
-        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-semibold text-emerald-400 uppercase tracking-widest">最新信号</span>
-          </div>
-          <div className="space-y-2">
-            {latestPicks && <ReportRow {...latestPicks} />}
-            {latestBuy && <ReportRow {...latestBuy} />}
-          </div>
-        </div>
-      )}
-
-      {latestReview && (
-        <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.03] p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-[10px] font-semibold text-violet-400 uppercase tracking-widest">持仓复盘</span>
-          </div>
-          <ReportRow {...latestReview} />
-        </div>
-      )}
-
-      <div>
-        <h2 className="text-sm font-semibold text-zinc-300 mb-2">最近报告</h2>
-        {recentReports.length === 0 ? (
-          <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 p-8 text-center">
-            <FileText className="w-8 h-8 text-zinc-700 mx-auto mb-2" />
-            <p className="text-xs text-zinc-500">暂无报告</p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {recentReports.map((r) => (
-              <ReportRow key={r.id} {...r} />
+      {/* ──── M3: 指数快览 ──── */}
+      <ModuleCard
+        label="M3" title="指数快览" accent="blue"
+        icon={<Globe className="w-3.5 h-3.5 text-blue-400" />}
+        body={
+          <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-center">
+            {domesticIndices.slice(0, 3).map(di => (
+              <div key={di.label} className="text-xs">
+                <span className="text-zinc-500 block text-[10px]">{di.label}</span>
+                <span className={cn("font-semibold tabular-nums", di.pct != null && di.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {pctText(di.pct)}
+                </span>
+              </div>
+            ))}
+            {domesticIndices.slice(3, 5).map(di => (
+              <div key={di.label} className="text-xs">
+                <span className="text-zinc-500 block text-[10px]">{di.label}</span>
+                <span className={cn("font-semibold tabular-nums", di.pct != null && di.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {pctText(di.pct)}
+                </span>
+              </div>
+            ))}
+            {globalIndices.slice(0, 1).map(gi => (
+              <div key={gi.label} className="text-xs">
+                <span className="text-zinc-500 block text-[10px]">{gi.label}</span>
+                <span className={cn("font-semibold tabular-nums", gi.pct != null && gi.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {pctText(gi.pct)}
+                </span>
+              </div>
             ))}
           </div>
-        )}
-      </div>
+        }
+        href="/mobile/index"
+      />
+
+      {/* ──── M4: 资金全景 ──── */}
+      <ModuleCard
+        label="M4" title="资金全景" accent="amber"
+        icon={<DollarSign className="w-3.5 h-3.5 text-amber-400" />}
+        subMetrics={[
+          { label: "两融", value: marginBalance != null ? `${(marginBalance / 1e8).toFixed(0)}亿` : "--", color: "amber" as const },
+          { label: "融券", value: shortBalance != null ? `${(shortBalance / 1e8).toFixed(0)}亿` : "--", color: "rose" as const },
+          { label: "周趋势", value: marginTrend != null ? `${marginTrend >= 0 ? "+" : ""}${marginTrend.toFixed(1)}%` : "--", color: marginTrend != null && marginTrend > 0 ? "emerald" as const : "rose" as const },
+          { label: "南向", value: formatBillions(southNetBuy), color: southNetBuy != null && southNetBuy >= 0 ? "emerald" as const : "rose" as const },
+          ...(lhbTop5.length > 0 ? [{ label: "龙虎榜", value: lhbTop5[0].name, color: "violet" as const }] : []),
+        ]}
+        chart={
+          marginChartData.length >= 2 ? (
+            <SparklineChart data={marginChartData.slice(-60)} color="#f59e0b" height={28} className="w-full h-7" />
+          ) : undefined
+        }
+        href="/mobile/flow"
+      />
+
+      {/* ──── M5 (was M7): 外围市场 ──── */}
+      <ModuleCard
+        label="M5" title="外围市场" accent="cyan"
+        icon={<Waves className="w-3.5 h-3.5 text-cyan-400" />}
+        body={
+          <div className="grid grid-cols-3 gap-x-3 text-center">
+            <div className="text-xs">
+              <span className="text-zinc-500 block text-[10px]">中概互联</span>
+              <span className={cn("font-semibold tabular-nums", kwebPct != null && kwebPct >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                {pctText(kwebPct)}
+              </span>
+            </div>
+            {futures.map(f => (
+              <div key={f.label} className="text-xs">
+                <span className="text-zinc-500 block text-[10px]">{f.label}</span>
+                <span className={cn("font-semibold tabular-nums", f.pct != null && f.pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {pctText(f.pct)}
+                </span>
+              </div>
+            ))}
+          </div>
+        }
+      />
+
+      {/* ──── M6 (was M8): 主线板块 ──── */}
+      <ModuleCard
+        label="M6" title="主线板块" accent="emerald"
+        icon={<Target className="w-3.5 h-3.5 text-emerald-400" />}
+        subMetrics={themePool.length > 0
+          ? themePool.slice(0, 3).map(t => {
+              const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
+              return {
+                label: t.theme,
+                value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--",
+                color: "emerald" as const,
+              };
+            })
+          : undefined
+        }
+        badge={themePool.length === 0 ? "数据接入中" : undefined}
+        href="/mobile/sectors"
+      />
+
+      {/* ──── M7 (was M9): 潜力主线 ──── */}
+      <ModuleCard
+        label="M7" title="潜力主线" accent="amber"
+        icon={<Compass className="w-3.5 h-3.5 text-amber-400" />}
+        subMetrics={themePool.length > 3
+          ? themePool.slice(3, 6).map(t => {
+              const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
+              return {
+                label: t.theme,
+                value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--",
+                color: "amber" as const,
+              };
+            })
+          : themePool.length > 0
+          ? themePool.slice(0, 3).map(t => {
+              const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
+              return {
+                label: t.theme,
+                value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--",
+                color: "amber" as const,
+              };
+            })
+          : undefined
+        }
+        badge={themePool.length <= 3 && themePool.length > 0 ? "潜力数据有限" : undefined}
+        href="/mobile/sectors"
+      />
+
+      {/* ──── 最新信号 (升级版) ──── */}
+      {(latestPicks || latestBuy) && (
+        <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/[0.02] p-3">
+          <p className="text-[10px] font-semibold text-emerald-400/80 mb-2 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            最新交易信号
+          </p>
+          <div className="space-y-1.5">
+            {latestPicks && (
+              <a href={`/mobile/reports/${latestPicks.id}`} className="block text-zinc-300 hover:text-emerald-400">
+                <span className="text-[11px] font-medium">📌 今日荐股</span>
+                <span className="text-[10px] text-zinc-500 ml-2 truncate">{latestPicks.title}</span>
+              </a>
+            )}
+            {latestBuy && (
+              <a href={`/mobile/reports/${latestBuy.id}`} className="block text-zinc-300 hover:text-emerald-400">
+                <span className="text-[11px] font-medium">📈 买入信号</span>
+                <span className="text-[10px] text-zinc-500 ml-2 truncate">{latestBuy.title}</span>
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ──── 持仓复盘 ──── */}
+      {latestReview && (
+        <div className="rounded-2xl border border-violet-500/10 bg-violet-500/[0.02] p-3">
+          <p className="text-[10px] font-semibold text-violet-400/80 mb-2">持仓复盘</p>
+          <a href={`/mobile/reports/${latestReview.id}`} className="block text-xs text-zinc-300 hover:text-violet-400 truncate">
+            📊 {latestReview.title}
+          </a>
+        </div>
+      )}
     </div>
   );
 }

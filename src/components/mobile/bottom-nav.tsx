@@ -4,16 +4,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  LayoutDashboard, TrendingUp, DollarSign,
-  Activity, Globe,
+  LayoutDashboard, Sparkles,
 } from "lucide-react";
 
 const tabs = [
   { href: "/mobile", label: "概览", icon: LayoutDashboard },
-  { href: "/mobile/macro", label: "宏观", icon: TrendingUp },
-  { href: "/mobile/flow", label: "资金", icon: DollarSign },
-  { href: "/mobile/sentiment", label: "情绪", icon: Activity },
-  { href: "/mobile/index", label: "指数", icon: Globe },
+  { href: "/mobile/picks", label: "荐股", icon: Sparkles },
 ];
 
 export function BottomNav() {

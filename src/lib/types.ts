@@ -24,3 +24,21 @@ export interface SentimentData {
   details: string | null;  // JSON string
   created_at: string;
 }
+
+export interface ThemePoolStock {
+  theme: string;
+  segment: string | null;
+  symbol: string;
+  name: string;
+  price: number;
+  change_pct: number;
+  volume: number;
+  source: string | null;
+  comment: string | null;
+  update_date: string;
+}
+
+export interface ThemePool {
+  theme: string;
+  stocks: ThemePoolStock[];
+}

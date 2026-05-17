@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import * as path from "path";
 import * as os from "os";
-import { type Report, type MacroScore, type SentimentData } from "./types";
+import { type Report, type MacroScore, type SentimentData, type ThemePoolStock } from "./types";
 
 const REPORTS_DB = path.join(os.homedir(), "code/dashboard/data/reports.db");
 const SCREENER_DB = path.join(os.homedir(), "code/stock-screener/data/screener.db");
@@ -278,4 +278,83 @@ export function getGlobalIndexHistory(symbol: string, limit = 30): { trade_date:
   return getScreenerDb().prepare(
     "SELECT trade_date, close FROM index_global_daily WHERE symbol = ? ORDER BY trade_date DESC LIMIT ?"
   ).all(symbol, limit) as any[];
+}
+
+/** Get single latest value for a global index (VIX, KWEB, etc.) */
+export function getLatestGlobalIndex(symbol: string): { trade_date: string; close: number } | null {
+  const row = getScreenerDb().prepare(
+    "SELECT trade_date, close FROM index_global_daily WHERE symbol = ? ORDER BY trade_date DESC LIMIT 1"
+  ).get(symbol) as any;
+  return row || null;
+}
+
+// ─── Theme Pool ─────────────────────────────────────
+
+/** Group theme_pool_stocks by theme from reports.db */
+export function getThemePool(): { theme: string; stocks: ThemePoolStock[] }[] {
+  const db = getDb();
+  const rows = db.prepare(
+    "SELECT * FROM theme_pool_stocks ORDER BY theme, segment, symbol"
+  ).all() as ThemePoolStock[];
+  const map = new Map<string, ThemePoolStock[]>();
+  for (const r of rows) {
+    const arr = map.get(r.theme) || [];
+    arr.push(r);
+    map.set(r.theme, arr);
+  }
+  return Array.from(map.entries()).map(([theme, stocks]) => ({ theme, stocks }));
+}
+
+// ─── Flow (extended for 9-module overview) ──────────
+
+/** Get HSGT history filtered by direction */
+export function getHsgtByDirection(direction: "north" | "south", limit = 60): { trade_date: string; net_buy: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, net_buy FROM hsgt_daily WHERE direction = ? ORDER BY trade_date DESC LIMIT ?"
+  ).all(direction, limit) as any[];
+}
+
+/** Get margin short (做空) history */
+export function getMarginShortHistory(limit = 60): { trade_date: string; short_balance: number; short_volume: number; margin_balance: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, short_balance, short_volume, margin_balance FROM margin_short_daily ORDER BY trade_date DESC LIMIT ?"
+  ).all(limit) as any[];
+}
+
+/** Get LHB (龙虎榜) top N for a date or latest */
+export function getLhbTop(date?: string, limit = 10): { trade_date: string; symbol: string; name: string; close: number; pct_change: number; net_amount: number; reason: string }[] {
+  const db = getScreenerDb();
+  if (date) {
+    return db.prepare(
+      "SELECT trade_date, symbol, name, close, pct_change, net_amount, reason FROM lhb_daily WHERE trade_date = ? ORDER BY ABS(net_amount) DESC LIMIT ?"
+    ).all(date, limit) as any[];
+  }
+  // Latest date
+  const latest = db.prepare("SELECT MAX(trade_date) as d FROM lhb_daily").get() as any;
+  if (!latest?.d) return [];
+  return db.prepare(
+    "SELECT trade_date, symbol, name, close, pct_change, net_amount, reason FROM lhb_daily WHERE trade_date = ? ORDER BY ABS(net_amount) DESC LIMIT ?"
+  ).all(latest.d, limit) as any[];
+}
+
+// ─── Futures ──────────────────────────────────────
+
+/** Get latest two closes for futures symbols (for pct calculation) */
+export function getLatestFutures(symbols: string[]): { symbol: string; trade_date: string; close: number; prev_close: number | null }[] {
+  const db = getScreenerDb();
+  const results: { symbol: string; trade_date: string; close: number; prev_close: number | null }[] = [];
+  for (const sym of symbols) {
+    const rows = db.prepare(
+      "SELECT trade_date, close FROM futures_daily WHERE symbol = ? ORDER BY trade_date DESC LIMIT 2"
+    ).all(sym) as { trade_date: string; close: number }[];
+    if (rows.length > 0) {
+      results.push({
+        symbol: sym,
+        trade_date: rows[0].trade_date,
+        close: rows[0].close,
+        prev_close: rows.length >= 2 ? rows[1].close : null,
+      });
+    }
+  }
+  return results;
 }
