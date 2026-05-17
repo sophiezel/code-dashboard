@@ -67,9 +67,11 @@ interface Props {
   // M5: 北向资金 (restored)
   northStocks: NorthStock[];
   northTotalInflow: number;
-  // South stocks (matching north format)
+  northDeltaWeek: number | null;
+  // South stocks
   southStocks: NorthStock[];
   southTotalInflow: number;
+  southDeltaWeek: number | null;
   // Sector aggregation
   northSectors: { sector: string; total_net_buy: number; buy_count: number; sell_count: number }[];
   // ETF flows
@@ -110,8 +112,8 @@ export function MobileDashboardClient(props: Props) {
     shortBalance, marginTrend,
     southNetBuy, southChartData, lhbTop5,
     latestMarginBuy, leverageRate, blockTrades,
-    northStocks, northTotalInflow,
-    southStocks, southTotalInflow,
+    northStocks, northTotalInflow, northDeltaWeek,
+    southStocks, southTotalInflow, southDeltaWeek,
     northSectors, etfFlows,
     kwebPct, futures,
     themePool,
@@ -265,6 +267,11 @@ export function MobileDashboardClient(props: Props) {
             <div className="flex items-center gap-1 flex-wrap text-[10px]">
               <span className="text-zinc-500 text-[9px]">北向</span>
               <span className={cn("tabular-nums font-semibold", northTotalInflow >= 0 ? "text-blue-400" : "text-rose-400")}>{formatBillions(northTotalInflow)}</span>
+              {northDeltaWeek != null && (
+                <span className={cn("tabular-nums text-[9px]", northDeltaWeek >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {northDeltaWeek >= 0 ? "↑" : "↓"}{Math.abs(northDeltaWeek).toFixed(0)}%(周)
+                </span>
+              )}
               {northStocks.slice(0, 3).map(s => (
                 <span key={s.symbol} className="tabular-nums text-zinc-400">
                   {s.symbol} {formatBillions(s.net_inflow)}
@@ -275,6 +282,11 @@ export function MobileDashboardClient(props: Props) {
             <div className="flex items-center gap-1 flex-wrap text-[10px]">
               <span className="text-zinc-500 text-[9px]">南向</span>
               <span className={cn("tabular-nums font-semibold", southTotalInflow >= 0 ? "text-violet-400" : "text-rose-400")}>{formatBillions(southTotalInflow)}</span>
+              {southDeltaWeek != null && (
+                <span className={cn("tabular-nums text-[9px]", southDeltaWeek >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                  {southDeltaWeek >= 0 ? "↑" : "↓"}{Math.abs(southDeltaWeek).toFixed(0)}%(周)
+                </span>
+              )}
               {southStocks.slice(0, 3).map(s => (
                 <span key={s.symbol} className="tabular-nums text-zinc-400">
                   {s.symbol} {formatBillions(s.net_inflow)}
@@ -294,7 +306,7 @@ export function MobileDashboardClient(props: Props) {
             )}
           </div>
         }
-        href="/mobile/flow"
+        href="/mobile/hsgt"
       />
 
       {/* ──── M6: 外围市场 ──── */}

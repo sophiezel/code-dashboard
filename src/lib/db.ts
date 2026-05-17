@@ -468,6 +468,14 @@ export function getEtfFlowTop(limit = 6): {
   ).all(latest.d, limit) as any[];
 }
 
+// ─── HSGT Total Trend ───────────────────────────
+
+export function getHsgtTotalTrend(direction: "北向" | "南向", limit = 120): { trade_date: string; total: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, SUM(net_inflow) as total FROM hsgt_stock_daily WHERE direction = ? AND net_inflow IS NOT NULL GROUP BY trade_date ORDER BY trade_date DESC LIMIT ?"
+  ).all(direction, limit) as any[];
+}
+
 // ─── Macro Indicator History ──────────────────────
 
 export function getCpiHistory(limit = 60): { trade_date: string; value: number }[] {

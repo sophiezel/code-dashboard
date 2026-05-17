@@ -19,6 +19,7 @@ import {
   getLatestTotalTurnover,
   getMarginBuyHistory,
   getBlockTradeTop,
+  getHsgtTotalTrend,
 } from "@/lib/db";
 import { MobileDashboardClient } from "./MobileDashboardClient";
 import { safeJsonParse } from "@/lib/utils";
@@ -233,6 +234,13 @@ export default function MobileDashboardPage() {
   const stockName = (code: string) => nameMap.get(code) || code;
   // Sector aggregation
   const northSectors = getHsgtSectorTop("北向", undefined, 5);
+  // ── North/South weekly delta ──
+  const northTrend = getHsgtTotalTrend("北向", 10);
+  const southTrend = getHsgtTotalTrend("南向", 10);
+  const northDeltaWeek = northTrend.length > 5
+    ? (northTrend[0].total - northTrend[5].total) / Math.abs(northTrend[5].total || 1) * 100 : null;
+  const southDeltaWeek = southTrend.length > 5
+    ? (southTrend[0].total - southTrend[5].total) / Math.abs(southTrend[5].total || 1) * 100 : null;
   // ETF flows
   const etfFlows = getEtfFlowTop(6);
 
@@ -323,11 +331,13 @@ export default function MobileDashboardPage() {
         net_inflow: s.net_inflow, change_pct: s.change_pct,
       }))}
       northTotalInflow={northTotalInflow}
+      northDeltaWeek={northDeltaWeek}
       southStocks={southStocks.map(s => ({
         symbol: stockName(s.symbol), rank: s.rank,
         net_inflow: s.net_inflow, change_pct: s.change_pct,
       }))}
       southTotalInflow={southTotalInflow}
+      southDeltaWeek={southDeltaWeek}
       northSectors={northSectors.map(s => ({
         sector: s.sector, total_net_buy: s.total_net_buy,
         buy_count: s.buy_count, sell_count: s.sell_count,
