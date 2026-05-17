@@ -5,7 +5,7 @@ import { SparklineChart } from "@/components/mobile/sparkline";
 import { BarChart } from "@/components/mobile/bar-chart";
 import {
   TrendingUp, Activity, Globe, DollarSign,
-  Ship, Waves, Target, ArrowUpDown, Info, Brain,
+  Ship, Waves, Target, ArrowUpDown, Info, Brain, BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ThemePool } from "@/lib/types";
@@ -450,7 +450,7 @@ export function MobileDashboardClient(props: Props) {
         <div className="rounded-2xl border border-violet-500/10 bg-violet-500/[0.02] p-3">
           <p className="text-[10px] font-semibold text-violet-400/80 mb-2">持仓复盘</p>
           <a href={`/mobile/reports/${latestReview.id}`} className="block text-xs text-zinc-300 hover:text-violet-400 truncate">
-            📊 {latestReview.title}
+            <BarChart3 className="w-3.5 h-3.5 inline-block mr-0.5" /> {latestReview.title}
           </a>
         </div>
       )}
