@@ -3,8 +3,8 @@ import * as path from "path";
 import * as os from "os";
 import { type Report, type MacroScore, type SentimentData, type ThemePoolStock } from "./types";
 
-const REPORTS_DB = path.join(os.homedir(), "code/dashboard/data/reports.db");
-const SCREENER_DB = path.join(os.homedir(), "code/stock-screener/data/screener.db");
+const REPORTS_DB = process.env.DASHBOARD_REPORTS_DB || path.join(os.homedir(), "code/dashboard/data/reports.db");
+const SCREENER_DB = process.env.DASHBOARD_SCREENER_DB || path.join(os.homedir(), "code/stock-screener/data/screener.db");
 
 // ── WAL mode singletons ────────────────────────────
 
