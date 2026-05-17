@@ -610,35 +610,41 @@ export function getDailyV2Stats(): { trade_date: string; total: number; dual_sou
 // Trading Module — Paper (模拟盘)
 // ═══════════════════════════════════════════════════════════════
 
-/** Get A-share sim positions for a given market+slot */
+/** Get sim positions for a given market+slot */
 export function getPaperPortfolio(market: "a" | "hk", slot?: string): SimPosition[] | SimHkPosition[] {
   const db = getScreenerDb();
   if (market === "hk") {
+    // sim_hk_position: strategy (not slot), weight_pct 为0时用 entry_price*shares 估算
     if (slot) {
       return db.prepare(
-        "SELECT * FROM sim_hk_position WHERE slot = ? ORDER BY weight_pct DESC"
+        "SELECT *, COALESCE(weight_pct,0) as weight_pct FROM sim_hk_position WHERE strategy = ?"
       ).all(slot) as SimHkPosition[];
     }
     return db.prepare(
-      "SELECT * FROM sim_hk_position ORDER BY weight_pct DESC"
+      "SELECT *, COALESCE(weight_pct,0) as weight_pct FROM sim_hk_position"
     ).all() as SimHkPosition[];
   }
+  // sim_position: slot, weight_pct 可能不存在
   if (slot) {
     return db.prepare(
-      "SELECT * FROM sim_position WHERE slot = ? ORDER BY weight_pct DESC"
+      "SELECT *, COALESCE(weight_pct,0) as weight_pct FROM sim_position WHERE slot = ?"
     ).all(slot) as SimPosition[];
   }
   return db.prepare(
-    "SELECT * FROM sim_position ORDER BY weight_pct DESC"
+    "SELECT *, COALESCE(weight_pct,0) as weight_pct FROM sim_position"
   ).all() as SimPosition[];
 }
 
-/** Get A-share sim NAV history */
+/** Get sim NAV history */
 export function getPaperNav(market: "a" | "hk", limit = 60): SimNav[] {
   const db = getScreenerDb();
-  const table = market === "hk" ? "sim_hk_nav" : "sim_portfolio_snapshot";
+  if (market === "hk") {
+    return db.prepare(
+      "SELECT trade_date, nav, daily_return FROM sim_hk_nav ORDER BY trade_date DESC LIMIT ?"
+    ).all(limit) as SimNav[];
+  }
   return db.prepare(
-    `SELECT trade_date, nav, daily_return, total_pnl, total_invested FROM ${table} ORDER BY trade_date DESC LIMIT ?`
+    "SELECT datetime as trade_date, COALESCE(nav, market_value) as nav, COALESCE(daily_return,0) as daily_return FROM sim_portfolio_snapshot ORDER BY datetime DESC LIMIT ?"
   ).all(limit) as SimNav[];
 }
 
@@ -647,7 +653,7 @@ export function getPaperTrades(market: "a" | "hk", limit = 50): SimTrade[] {
   const db = getScreenerDb();
   const table = market === "hk" ? "sim_hk_trades" : "sim_trades";
   return db.prepare(
-    `SELECT * FROM ${table} ORDER BY trade_date DESC LIMIT ?`
+    `SELECT * FROM ${table} ORDER BY trade_time DESC LIMIT ?`
   ).all(limit) as SimTrade[];
 }
 
@@ -660,7 +666,7 @@ export function getQuantPortfolio(market: "a" | "hk", limit = 20): QuantPosition
   const db = getScreenerDb();
   const table = market === "hk" ? "quant_hk_position" : "quant_position";
   return db.prepare(
-    `SELECT * FROM ${table} ORDER BY weight_pct DESC LIMIT ?`
+    `SELECT *, COALESCE(weight,0) as weight_pct FROM ${table} ORDER BY weight DESC LIMIT ?`
   ).all(limit) as QuantPosition[];
 }
 
@@ -669,7 +675,7 @@ export function getQuantNav(market: "a" | "hk", limit = 60): QuantNav[] {
   const db = getScreenerDb();
   const table = market === "hk" ? "quant_hk_nav" : "quant_nav";
   return db.prepare(
-    `SELECT trade_date, nav, daily_return, benchmark_return FROM ${table} ORDER BY trade_date DESC LIMIT ?`
+    `SELECT trade_date, nav, daily_return FROM ${table} ORDER BY trade_date DESC LIMIT ?`
   ).all(limit) as QuantNav[];
 }
 
@@ -682,11 +688,15 @@ export function getQuantTrades(market: "a" | "hk", limit = 50): QuantTrade[] {
   ).all(limit) as QuantTrade[];
 }
 
-/** Get factor IC history */
+/** Get factor IC history (placeholder — table may not exist yet) */
 export function getFactorIC(limit = 30): FactorIC[] {
-  return getScreenerDb().prepare(
-    "SELECT * FROM quant_factor_ic ORDER BY date DESC LIMIT ?"
-  ).all(limit) as FactorIC[];
+  try {
+    return getScreenerDb().prepare(
+      "SELECT * FROM quant_factor_ic ORDER BY date DESC LIMIT ?"
+    ).all(limit) as FactorIC[];
+  } catch {
+    return [];
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -696,15 +706,19 @@ export function getFactorIC(limit = 30): FactorIC[] {
 /** Get live portfolio positions (desensitized: only weight_pct + pnl_pct) */
 export function getLivePortfolio(): LivePosition[] {
   return getDb().prepare(
-    "SELECT symbol, weight_pct, pnl_pct, sector FROM live_portfolio ORDER BY weight_pct DESC"
+    "SELECT symbol, name, weight_pct, pnl_pct, sector FROM live_portfolio ORDER BY weight_pct DESC"
   ).all() as LivePosition[];
 }
 
-/** Get live portfolio diagnosis metrics */
+/** Get live portfolio diagnosis — reads from reports */
 export function getLiveDiagnosis(): LiveDiagnosis[] {
-  return getScreenerDb().prepare(
-    "SELECT metric, value, status FROM portfolio_diagnosis ORDER BY metric"
-  ).all() as LiveDiagnosis[];
+  try {
+    return getScreenerDb().prepare(
+      "SELECT metric, value, status FROM portfolio_diagnosis ORDER BY metric"
+    ).all() as LiveDiagnosis[];
+  } catch {
+    return [];
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -713,15 +727,25 @@ export function getLiveDiagnosis(): LiveDiagnosis[] {
 
 /** Get unified risk overview */
 export function getRiskOverview(): RiskOverview | null {
-  return (getScreenerDb().prepare(
-    "SELECT * FROM risk_metrics ORDER BY update_time DESC LIMIT 1"
-  ).get() as RiskOverview) || null;
+  const row = getScreenerDb().prepare(
+    "SELECT * FROM risk_metrics ORDER BY trade_date DESC LIMIT 1"
+  ).get() as any;
+  if (!row) return null;
+  return {
+    var_95: row.var_95 ?? 0,
+    var_99: row.var_99 ?? 0,
+    cvar_95: row.cvar_95 ?? 0,
+    max_drawdown: row.max_drawdown ?? 0,
+    sector_concentration: row.sector_concentration ?? 0,
+    current_drawdown_pct: row.max_drawdown ?? 0,
+    sharpe: 0, // risk_metrics 无此列，后续补充
+  } as RiskOverview;
 }
 
 /** Get recent risk events / drawdown alerts */
 export function getRiskEvents(limit = 20): RiskEvent[] {
   return getScreenerDb().prepare(
-    "SELECT * FROM sim_drawdown_alerts ORDER BY date DESC LIMIT ?"
+    "SELECT id, alert_time as date, drawdown_pct, current_pnl_pct, peak_pnl_pct, 'drawdown' as event_type FROM sim_drawdown_alerts ORDER BY alert_time DESC LIMIT ?"
   ).all(limit) as RiskEvent[];
 }
 
@@ -734,25 +758,26 @@ export function getMessages(type?: string, limit = 50): Message[] {
   const db = getScreenerDb();
   if (type) {
     return db.prepare(
-      "SELECT * FROM messages WHERE type = ? ORDER BY created_at DESC LIMIT ?"
+      "SELECT *, read as is_read FROM messages WHERE type = ? ORDER BY created_at DESC LIMIT ?"
     ).all(type, limit) as Message[];
   }
   return db.prepare(
-    "SELECT * FROM messages ORDER BY created_at DESC LIMIT ?"
+    "SELECT *, read as is_read FROM messages ORDER BY created_at DESC LIMIT ?"
   ).all(limit) as Message[];
 }
 
 /** Get single message by id */
 export function getMessageById(id: number): Message | null {
-  return (getScreenerDb().prepare(
-    "SELECT * FROM messages WHERE id = ?"
-  ).get(id) as Message) || null;
+  const row = getScreenerDb().prepare(
+    "SELECT *, read as is_read FROM messages WHERE id = ?"
+  ).get(id) as any;
+  return (row as Message) || null;
 }
 
 /** Mark a message as read */
 export function markMessageRead(id: number): void {
   getScreenerDb().prepare(
-    "UPDATE messages SET is_read = 1 WHERE id = ?"
+    "UPDATE messages SET read = 1 WHERE id = ?"
   ).run(id);
 }
 
