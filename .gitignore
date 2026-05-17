@@ -8,6 +8,7 @@ data/reports.db
 __pycache__/
 .DS_Store
 .vercel/
+tsconfig.tsbuildinfo
 
 # SQLite runtime
 *.db-shm
