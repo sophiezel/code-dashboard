@@ -413,3 +413,35 @@ export function getEtfFlowTop(limit = 6): {
     "SELECT symbol, name, etf_type, pct_change, fund_size FROM etf_flow_daily WHERE trade_date = ? ORDER BY ABS(pct_change) DESC LIMIT ?"
   ).all(latest.d, limit) as any[];
 }
+
+// ─── Macro Indicator History ──────────────────────
+
+export function getCpiHistory(limit = 60): { trade_date: string; value: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, cpi_yoy as value FROM macro_cpi ORDER BY trade_date DESC LIMIT ?"
+  ).all(limit) as any[];
+}
+
+export function getPpiHistory(limit = 60): { trade_date: string; value: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, ppi_yoy as value FROM macro_ppi ORDER BY trade_date DESC LIMIT ?"
+  ).all(limit) as any[];
+}
+
+export function getPmiHistory(limit = 60): { trade_date: string; value: number }[] {
+  return getScreenerDb().prepare(
+    'SELECT "月份" as trade_date, "制造业-指数" as value FROM macro_pmi ORDER BY "月份" DESC LIMIT ?'
+  ).all(limit) as any[];
+}
+
+export function getM2History(limit = 60): { trade_date: string; value: number }[] {
+  return getScreenerDb().prepare(
+    'SELECT "月份" as trade_date, "货币和准货币(M2)-同比增长" as value FROM macro_m2 ORDER BY "月份" DESC LIMIT ?'
+  ).all(limit) as any[];
+}
+
+export function getShiborHistory(limit = 60): { trade_date: string; value: number }[] {
+  return getScreenerDb().prepare(
+    'SELECT "日期" as trade_date, "O/N-定价" as value FROM macro_shibor ORDER BY "日期" DESC LIMIT ?'
+  ).all(limit) as any[];
+}

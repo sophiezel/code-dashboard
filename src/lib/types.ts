@@ -46,9 +46,10 @@ export interface ThemePool {
 export interface HsgtStockItem {
   trade_date: string;
   symbol: string;
+  name?: string;
   direction: string;
   rank: number;
-  net_inflow: number;   // 持股市值变化，单位元
+  net_inflow: number;
   change_pct: number;
 }
 

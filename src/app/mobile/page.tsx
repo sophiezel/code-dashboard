@@ -189,6 +189,21 @@ export default function MobileDashboardPage() {
   // South-bound stock TOP10
   const southStocks = getHsgtStockTop("南向", undefined, 10);
   const southTotalInflow = southStocks.reduce((sum, s) => sum + (s.net_inflow || 0), 0);
+  // ── name lookup from stock_basic ──
+  const nameMap = new Map<string, string>();
+  const allCodes = [...new Set([...northStocks.map(s => s.symbol), ...southStocks.map(s => s.symbol)])];
+  if (allCodes.length > 0) {
+    try {
+      const Database = require("better-sqlite3");
+      const sdb = new Database("/Users/xuwei/code/stock-screener/data/screener.db", { readonly: true });
+      const rows = sdb.prepare(
+        `SELECT symbol, name FROM stock_basic WHERE symbol IN (${allCodes.map(() => "?").join(",")})`
+      ).all(...allCodes) as { symbol: string; name: string }[];
+      for (const r of rows) nameMap.set(r.symbol, r.name);
+      sdb.close();
+    } catch { /* ignore */ }
+  }
+  const stockName = (code: string) => nameMap.get(code) || code;
   // Sector aggregation
   const northSectors = getHsgtSectorTop("北向", undefined, 5);
   // ETF flows
@@ -266,12 +281,12 @@ export default function MobileDashboardPage() {
       }))}
       // M5: 北向
       northStocks={northStocks.map(s => ({
-        symbol: s.symbol, rank: s.rank,
+        symbol: stockName(s.symbol), rank: s.rank,
         net_inflow: s.net_inflow, change_pct: s.change_pct,
       }))}
       northTotalInflow={northTotalInflow}
       southStocks={southStocks.map(s => ({
-        symbol: s.symbol, rank: s.rank,
+        symbol: stockName(s.symbol), rank: s.rank,
         net_inflow: s.net_inflow, change_pct: s.change_pct,
       }))}
       southTotalInflow={southTotalInflow}
