@@ -248,6 +248,24 @@ export default function MobileDashboardPage() {
   let themePool: ThemePool[] = [];
   try { themePool = getThemePool(); } catch { /* empty */ }
 
+  // ── Theme fund flow aggregation ──
+  const themeFlowMap = new Map<string, number>();
+  if (themePool.length > 0) {
+    try {
+      const Database = require("better-sqlite3");
+      const sdb = new Database("/Users/xuwei/code/stock-screener/data/screener.db", { readonly: true });
+      for (const theme of themePool) {
+        const symbols = theme.stocks.map(s => s.symbol);
+        const placeholders = symbols.map(() => "?").join(",");
+        const row = sdb.prepare(
+          `SELECT SUM(main_net) as total FROM fund_flow_stock WHERE symbol IN (${placeholders}) AND trade_date = (SELECT MAX(trade_date) FROM fund_flow_stock)`
+        ).get(...symbols) as any;
+        if (row?.total != null) themeFlowMap.set(theme.theme, row.total);
+      }
+      sdb.close();
+    } catch { /* ignore */ }
+  }
+
   // ── Decision ──
   const decision = computeDecision(
     macro?.score ?? null,
@@ -338,6 +356,7 @@ export default function MobileDashboardPage() {
       futures={futures}
       // M8/M9
       themePool={themePool}
+      themeFlowMap={Object.fromEntries(themeFlowMap)}
       // Reports
       latestPicks={latestPicks ? {
         id: latestPicks.id, type: latestPicks.type,

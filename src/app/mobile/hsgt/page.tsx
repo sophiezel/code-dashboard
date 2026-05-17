@@ -1,4 +1,4 @@
-import { getHsgtStockTop, getHsgtSectorTop, getEtfFlowTop, getHsgtTotalTrend } from "@/lib/db";
+import { getHsgtStockTop, getHsgtSectorTop, getEtfFlowTop, getHsgtTotalTrend, getHsgtStockTrends } from "@/lib/db";
 import { SparklineChart } from "@/components/mobile/sparkline";
 import { ZoomableSparkline } from "@/components/mobile/zoomable-sparkline";
 import { ArrowUpDown, TrendingUp, Info } from "lucide-react";
@@ -23,6 +23,10 @@ export default function MobileHsgtPage() {
   const southStocks = getHsgtStockTop("南向", undefined, 20);
   const northSectors = getHsgtSectorTop("北向", undefined, 10);
   const etfFlows = getEtfFlowTop(17);
+
+  // ── Individual stock trends ──
+  const northTrends = getHsgtStockTrends("北向", northStocks.slice(0, 20).map(s => s.symbol), 30);
+  const southTrends = getHsgtStockTrends("南向", southStocks.slice(0, 20).map(s => s.symbol), 30);
 
   const latestNorth = northTrend[northTrend.length - 1];
   const latestSouth = southTrend[southTrend.length - 1];
@@ -94,13 +98,21 @@ export default function MobileHsgtPage() {
           <span className="ml-auto text-[10px] text-zinc-500">{northStocks[0]?.trade_date?.slice(5) || ""}</span>
         </summary>
         <div className="px-3 pb-3 space-y-0.5">
-          {northStocks.map(s => (
-            <div key={s.symbol} className="flex items-center gap-2 text-[10px] py-0.5 border-b border-zinc-800/30 last:border-0">
-              <span className="text-zinc-300 truncate flex-1">{s.name || s.symbol}</span>
-              <span className={cn("tabular-nums font-mono", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{fmtB(s.net_inflow)}</span>
-              <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
-            </div>
-          ))}
+          {northStocks.map(s => {
+              const trend = northTrends[s.symbol] || [];
+              return (
+                <div key={s.symbol} className="flex items-center gap-2 text-[10px] py-0.5 border-b border-zinc-800/30 last:border-0">
+                  <span className="text-zinc-300 truncate flex-1">{s.name || s.symbol}</span>
+                  <span className={cn("tabular-nums font-mono", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{fmtB(s.net_inflow)}</span>
+                  <span className={cn("tabular-nums", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
+                  {trend.length >= 2 && (
+                    <span className="w-12 shrink-0">
+                      <SparklineChart data={trend} color={s.net_inflow >= 0 ? "#10b981" : "#ef4444"} height={18} className="w-12 h-[18px]" />
+                    </span>
+                  )}
+                </div>
+              );
+            })}
         </div>
       </details>
 
@@ -142,13 +154,21 @@ export default function MobileHsgtPage() {
           <span className="ml-auto text-[10px] text-zinc-500">{southStocks[0]?.trade_date?.slice(5) || ""}</span>
         </summary>
         <div className="px-3 pb-3 space-y-0.5">
-          {southStocks.map(s => (
-            <div key={s.symbol} className="flex items-center gap-2 text-[10px] py-0.5 border-b border-zinc-800/30 last:border-0">
-              <span className="text-zinc-300 truncate flex-1">{s.name || s.symbol}</span>
-              <span className={cn("tabular-nums font-mono", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{fmtB(s.net_inflow)}</span>
-              <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
-            </div>
-          ))}
+          {southStocks.map(s => {
+              const trend = southTrends[s.symbol] || [];
+              return (
+                <div key={s.symbol} className="flex items-center gap-2 text-[10px] py-0.5 border-b border-zinc-800/30 last:border-0">
+                  <span className="text-zinc-300 truncate flex-1">{s.name || s.symbol}</span>
+                  <span className={cn("tabular-nums font-mono", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{fmtB(s.net_inflow)}</span>
+                  <span className={cn("tabular-nums", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
+                  {trend.length >= 2 && (
+                    <span className="w-12 shrink-0">
+                      <SparklineChart data={trend} color={s.net_inflow >= 0 ? "#10b981" : "#ef4444"} height={18} className="w-12 h-[18px]" />
+                    </span>
+                  )}
+                </div>
+              );
+            })}
         </div>
       </details>
 

@@ -5,7 +5,7 @@ import { SparklineChart } from "@/components/mobile/sparkline";
 import { BarChart } from "@/components/mobile/bar-chart";
 import {
   TrendingUp, Activity, Globe, DollarSign,
-  Ship, Waves, Target, Compass, ArrowUpDown,
+  Ship, Waves, Target, ArrowUpDown,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ThemePool } from "@/lib/types";
@@ -79,8 +79,9 @@ interface Props {
   // M6: 外围市场
   kwebPct: number | null;
   futures: FuturesSnapshot[];
-  // M7/M8: 主线/潜力
+  // M7/M8: 主力/潜力主线
   themePool: ThemePool[];
+  themeFlowMap: Record<string, number>;
   // Reports
   latestPicks: ReportSummary | null;
   latestBuy: ReportSummary | null;
@@ -117,6 +118,7 @@ export function MobileDashboardClient(props: Props) {
     northSectors, etfFlows,
     kwebPct, futures,
     themePool,
+    themeFlowMap,
     latestPicks, latestBuy, latestReview,
   } = props;
 
@@ -328,36 +330,56 @@ export function MobileDashboardClient(props: Props) {
         }
       />
 
-      {/* ──── M7: 主线板块 ──── */}
-      <ModuleCard label="M7" title="主线板块" accent="emerald"
+      {/* ──── M7: 板块地图 ──── */}
+      <ModuleCard label="M7" title="板块地图" accent="emerald"
         icon={<Target className="w-3.5 h-3.5 text-emerald-400" />}
-        subMetrics={themePool.length > 0
-          ? themePool.slice(0, 3).map(t => {
-              const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
-              return { label: t.theme, value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--", color: "emerald" as const };
-            })
-          : undefined
+        body={
+          themePool.length > 0 ? (
+            <div className="space-y-1.5 text-[10px]">
+              <div className="text-[9px] text-zinc-500 mb-0.5">主线</div>
+              {themePool.slice(0, 3).map(t => {
+                const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
+                const flow = themeFlowMap[t.theme];
+                return (
+                  <div key={t.theme} className="flex items-center gap-1 flex-wrap">
+                    <span className="text-zinc-400">{t.theme}</span>
+                    <span className={cn("tabular-nums", best?.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                      {best ? `${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--"}
+                    </span>
+                    {flow != null && (
+                      <span className={cn("tabular-nums text-[9px]", flow >= 0 ? "text-emerald-400/70" : "text-rose-400/70")}>
+                        {flow >= 0 ? "+" : ""}{(flow/1e8).toFixed(1)}亿
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              {themePool.length > 3 && (
+                <>
+                  <div className="text-[9px] text-zinc-500 mt-1 mb-0.5">潜力</div>
+                  {themePool.slice(3, 6).map(t => {
+                    const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
+                    const flow = themeFlowMap[t.theme];
+                    return (
+                      <div key={t.theme} className="flex items-center gap-1 flex-wrap">
+                        <span className="text-zinc-500">{t.theme}</span>
+                        <span className={cn("tabular-nums", best?.change_pct >= 0 ? "text-emerald-400/70" : "text-rose-400/70")}>
+                          {best ? `${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--"}
+                        </span>
+                        {flow != null && (
+                          <span className={cn("tabular-nums text-[9px]", flow >= 0 ? "text-emerald-400/50" : "text-rose-400/50")}>
+                            {flow >= 0 ? "+" : ""}{(flow/1e8).toFixed(1)}亿
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+            </div>
+          ) : undefined
         }
         badge={themePool.length === 0 ? "数据接入中" : undefined}
-        href="/mobile/sectors"
-      />
-
-      {/* ──── M8: 潜力主线 ──── */}
-      <ModuleCard label="M8" title="潜力主线" accent="amber"
-        icon={<Compass className="w-3.5 h-3.5 text-amber-400" />}
-        subMetrics={themePool.length > 3
-          ? themePool.slice(3, 6).map(t => {
-              const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
-              return { label: t.theme, value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--", color: "amber" as const };
-            })
-          : themePool.length > 0
-          ? themePool.slice(0, 3).map(t => {
-              const best = [...t.stocks].sort((a, b) => b.change_pct - a.change_pct)[0];
-              return { label: t.theme, value: best ? `${best.name} ${best.change_pct >= 0 ? "+" : ""}${best.change_pct.toFixed(1)}%` : "--", color: "amber" as const };
-            })
-          : undefined
-        }
-        badge={themePool.length <= 3 && themePool.length > 0 ? "潜力数据有限" : undefined}
         href="/mobile/sectors"
       />
 

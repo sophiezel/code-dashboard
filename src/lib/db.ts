@@ -475,6 +475,19 @@ export function getHsgtTotalTrend(direction: "北向" | "南向", limit = 120): 
   ).all(direction, limit) as any[];
 }
 
+/** Get individual stock net_inflow history for trend sparklines */
+export function getHsgtStockTrends(direction: "北向" | "南向", symbols: string[], limit = 30): Record<string, number[]> {
+  const db = getScreenerDb();
+  const result: Record<string, number[]> = {};
+  for (const sym of symbols) {
+    const rows = db.prepare(
+      "SELECT net_inflow FROM hsgt_stock_daily WHERE direction = ? AND symbol = ? ORDER BY trade_date DESC LIMIT ?"
+    ).all(direction, sym, limit) as { net_inflow: number }[];
+    result[sym] = rows.map(r => r.net_inflow / 1e8).reverse();
+  }
+  return result;
+}
+
 // ─── Macro Indicator History ──────────────────────
 
 export function getCpiHistory(limit = 60): { trade_date: string; value: number }[] {
@@ -493,6 +506,48 @@ export function getPmiHistory(limit = 60): { trade_date: string; value: number }
   return getScreenerDb().prepare(
     'SELECT "月份" as trade_date, "制造业-指数" as value FROM macro_pmi ORDER BY "月份" DESC LIMIT ?'
   ).all(limit) as any[];
+}
+
+// ─── Theme / Sector Analytics ────────────────────
+
+/** Get theme fund flow (SUM main_net for theme stocks) */
+export function getThemeFundFlow(symbols: string[]): number | null {
+  const db = getScreenerDb();
+  if (symbols.length === 0) return null;
+  const ph = symbols.map(() => "?").join(",");
+  const row = db.prepare(
+    `SELECT SUM(main_net) as total FROM fund_flow_stock WHERE symbol IN (${ph}) AND trade_date = (SELECT MAX(trade_date) FROM fund_flow_stock)`
+  ).get(...symbols) as any;
+  return row?.total ?? null;
+}
+
+/** Get theme daily avg change_pct trend */
+export function getThemeTrend(symbols: string[], limit = 61): { trade_date: string; avg_pct: number }[] {
+  const db = getScreenerDb();
+  if (symbols.length === 0) return [];
+  const ph = symbols.map(() => "?").join(",");
+  return db.prepare(
+    `SELECT trade_date, AVG(chg) as avg_pct FROM (
+      SELECT trade_date, (close - prev_close) / prev_close * 100 as chg FROM (
+        SELECT trade_date, close, LAG(close) OVER (ORDER BY trade_date ASC) as prev_close
+        FROM stock_daily WHERE symbol IN (${ph}) ORDER BY trade_date DESC LIMIT ${limit}
+      ) WHERE prev_close IS NOT NULL AND prev_close > 0 ORDER BY trade_date ASC
+    ) GROUP BY trade_date ORDER BY trade_date ASC`
+  ).all(...symbols) as any[];
+}
+
+/** Get individual stock daily change_pct trend */
+export function getStockTrend(symbol: string, limit = 31): number[] {
+  const db = getScreenerDb();
+  const rows = db.prepare(
+    `SELECT chg FROM (
+      SELECT (close - prev_close) / prev_close * 100 as chg FROM (
+        SELECT close, LAG(close) OVER (ORDER BY trade_date ASC) as prev_close
+        FROM stock_daily WHERE symbol = ? ORDER BY trade_date DESC LIMIT ${limit}
+      ) WHERE prev_close IS NOT NULL AND prev_close > 0 ORDER BY trade_date ASC
+    )`
+  ).all(symbol) as { chg: number }[];
+  return rows.map(r => r.chg);
 }
 
 export function getM2History(limit = 60): { trade_date: string; value: number }[] {
