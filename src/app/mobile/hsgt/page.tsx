@@ -96,7 +96,7 @@ export default function MobileHsgtPage() {
         <div className="px-3 pb-3 space-y-0.5">
           {northStocks.map(s => (
             <div key={s.symbol} className="flex items-center gap-2 text-[10px] py-0.5 border-b border-zinc-800/30 last:border-0">
-              <span className="font-mono text-zinc-500 w-12 shrink-0">{s.symbol}</span>
+              <span className="text-zinc-300 truncate flex-1">{s.name || s.symbol}</span>
               <span className={cn("tabular-nums font-mono", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{fmtB(s.net_inflow)}</span>
               <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
             </div>
@@ -144,7 +144,7 @@ export default function MobileHsgtPage() {
         <div className="px-3 pb-3 space-y-0.5">
           {southStocks.map(s => (
             <div key={s.symbol} className="flex items-center gap-2 text-[10px] py-0.5 border-b border-zinc-800/30 last:border-0">
-              <span className="font-mono text-zinc-500 w-12 shrink-0">{s.symbol}</span>
+              <span className="text-zinc-300 truncate flex-1">{s.name || s.symbol}</span>
               <span className={cn("tabular-nums font-mono", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{fmtB(s.net_inflow)}</span>
               <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
             </div>

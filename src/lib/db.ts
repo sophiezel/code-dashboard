@@ -416,21 +416,20 @@ export function getLatestFutures(symbols: string[]): { symbol: string; trade_dat
 // ─── HSGT Stock Top ────────────────────────────────
 
 export function getHsgtStockTop(direction: "北向" | "南向", date?: string, limit = 10): {
-  trade_date: string; symbol: string; rank: number; net_inflow: number; change_pct: number;
+  trade_date: string; symbol: string; name: string | null; rank: number; net_inflow: number; change_pct: number;
 }[] {
   const db = getScreenerDb();
   if (date) {
     return db.prepare(
-      "SELECT trade_date, symbol, rank, net_inflow, change_pct FROM hsgt_stock_daily WHERE direction = ? AND trade_date = ? ORDER BY rank LIMIT ?"
+      "SELECT trade_date, symbol, name, rank, net_inflow, change_pct FROM hsgt_stock_daily WHERE direction = ? AND trade_date = ? ORDER BY rank LIMIT ?"
     ).all(direction, date, limit) as any[];
   }
-  // Latest date
   const latest = db.prepare(
     "SELECT MAX(trade_date) as d FROM hsgt_stock_daily WHERE direction = ?"
   ).get(direction) as any;
   if (!latest?.d) return [];
   return db.prepare(
-    "SELECT trade_date, symbol, rank, net_inflow, change_pct FROM hsgt_stock_daily WHERE direction = ? AND trade_date = ? ORDER BY rank LIMIT ?"
+    "SELECT trade_date, symbol, name, rank, net_inflow, change_pct FROM hsgt_stock_daily WHERE direction = ? AND trade_date = ? ORDER BY rank LIMIT ?"
   ).all(direction, latest.d, limit) as any[];
 }
 
