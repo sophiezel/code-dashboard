@@ -1,63 +1,60 @@
 import { NextResponse } from "next/server";
-import { getScreenerDb } from "@/lib/db";
-import fs from "fs";
-import path from "path";
+import Database from "better-sqlite3";
+import * as path from "path";
+import * as os from "os";
 
-export async function GET() {
-  const checks: Record<string, { status: string; detail?: string }> = {};
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-  // 1. DB连接
+const SCREENER_DB = process.env.DASHBOARD_SCREENER_DB || process.env.SCREENER_DB_PATH ||
+  path.join(os.homedir(), "code/stock-screener/data/screener.db");
+const REPORTS_DB = process.env.DASHBOARD_REPORTS_DB || process.env.REPORTS_DB_PATH ||
+  path.join(os.homedir(), "code/dashboard/data/reports.db");
+
+function checkDb(dbPath: string, label: string): { ok: boolean; error?: string; freshness?: string } {
   try {
-    const db = getScreenerDb();
-    const row = db.prepare("SELECT 1 as ok").get() as any;
-    checks.db = { status: row?.ok === 1 ? "ok" : "error" };
-  } catch (e: any) {
-    checks.db = { status: "error", detail: e.message };
-  }
-
-  // 2. DB文件大小
-  try {
-    const dbPath = process.env.SCREENER_DB_PATH || path.join(process.cwd(), "..", "stock-screener", "data", "screener.db");
-    const stat = fs.statSync(dbPath);
-    checks.db_size_mb = { status: stat.size / 1024 / 1024 < 2000 ? "ok" : "warn", detail: `${(stat.size / 1024 / 1024).toFixed(0)}MB` };
-  } catch {
-    checks.db_size_mb = { status: "error", detail: "file not found" };
-  }
-
-  // 3. 关键表行数
-  try {
-    const db = getScreenerDb();
-    const tables = ["stock_daily", "stock_daily_v2", "data_provenance_log", "sync_outbox"];
-    for (const t of tables) {
+    const db = new Database(dbPath, { readonly: true });
+    db.pragma("busy_timeout = 3000");
+    const integrity = db.prepare("PRAGMA integrity_check").get() as any;
+    db.close();
+    if (integrity?.integrity_check !== "ok") {
+      return { ok: false, error: String(integrity?.integrity_check || "unknown") };
+    }
+    // Check data freshness for screener only
+    if (label === "screener") {
       try {
-        const cnt = db.prepare(`SELECT COUNT(*) as c FROM ${t}`).get() as any;
-        checks[`table_${t}`] = { status: "ok", detail: `${cnt?.c ?? 0} rows` };
+        const db2 = new Database(dbPath, { readonly: true });
+        db2.pragma("busy_timeout = 3000");
+        const latest = db2.prepare(
+          "SELECT MAX(date) as latest_date FROM stock_daily WHERE date IS NOT NULL"
+        ).get() as any;
+        db2.close();
+        return { ok: true, freshness: latest?.latest_date || null };
       } catch {
-        checks[`table_${t}`] = { status: "missing" };
+        return { ok: true };
       }
     }
-  } catch {}
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e.message };
+  }
+}
 
-  // 4. outbox backlog
-  try {
-    const db = getScreenerDb();
-    const pending = (db.prepare("SELECT COUNT(*) as c FROM sync_outbox WHERE status='pending'").get() as any)?.c ?? 0;
-    checks.outbox_pending = { status: pending > 100 ? "warn" : "ok", detail: `${pending}` };
-  } catch {}
+export async function GET() {
+  const screener = checkDb(SCREENER_DB, "screener");
+  const reports = checkDb(REPORTS_DB, "reports");
 
-  // 汇总状态
-  const hasError = Object.values(checks).some((c) => c.status === "error");
-  const hasWarn = Object.values(checks).some((c) => c.status === "warn");
-
-  return NextResponse.json({
-    status: hasError ? "error" : hasWarn ? "warn" : "ok",
+  const result = {
+    status: screener.ok && reports.ok ? "ok" : "degraded",
+    db_ok: screener.ok,
+    reports_ok: reports.ok,
+    db_error: screener.error,
+    reports_error: reports.error,
+    data_freshness: screener.freshness || null,
+    uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
-    checks,
-  }, {
-    status: hasError ? 503 : 200,
-    headers: {
-      'Cache-Control': 'no-store',
-      'Access-Control-Allow-Origin': '*',
-    }
-  });
+  };
+
+  const statusCode = screener.ok && reports.ok ? 200 : 503;
+  return NextResponse.json(result, { status: statusCode });
 }

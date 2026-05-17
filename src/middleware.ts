@@ -57,6 +57,7 @@ export default async function middleware(request: NextRequest) {
   const isPublicPath =
     pathname.startsWith("/activate") ||
     pathname.startsWith("/api/activate") ||
+    pathname.startsWith("/api/health") ||
     pathname.startsWith("/_next") ||
     pathname.startsWith("/favicon.ico") ||
     pathname === "/robots.txt";

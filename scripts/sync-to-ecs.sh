@@ -1,7 +1,7 @@
 #!/bin/bash
 # ~/code/dashboard/scripts/sync-to-ecs.sh
-# Mac → ECS 数据同步：screener.db + reports.db
-# 每5分钟执行一次（Mac crontab）
+# Mac → ECS 数据同步：screener.db + reports.db（三层防护 + 自愈回滚）
+# 每5分钟 cron 执行
 
 set -e
 
@@ -12,39 +12,106 @@ DEST_DIR="/opt/dashboard/data"
 SSH_KEY="$HOME/.ssh/hermes-ecs"
 LOCKFILE="/tmp/dashboard-sync.lock"
 TMPDIR="/tmp/dashboard-sync-$$"
+LOG_TAG="[sync-ecs]"
 
-# macOS 兼容锁
-shlock -f "$LOCKFILE" -p $$ || { echo "$(date): sync already running, skipping"; exit 0; }
+shlock -f "$LOCKFILE" -p $$ || { echo "$(date +%T) $LOG_TAG already running, skip"; exit 0; }
 trap 'rm -f "$LOCKFILE"; rm -rf "$TMPDIR"' EXIT
 
 mkdir -p "$TMPDIR"
-echo "$(date): === sync start ==="
+START_TS=$(date +%s)
+echo "$(date -Iseconds) $LOG_TAG === start ==="
 
-# 1. WAL checkpoint
+# ─── L1: Mac端校验 ───────────────────────────────────
+echo "$(date +%T) $LOG_TAG L1: mac backup + integrity"
+
 sqlite3 "$SOURCE_SCREENER" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null
 sqlite3 "$SOURCE_REPORTS" "PRAGMA wal_checkpoint(TRUNCATE);" 2>/dev/null
 
-# 2. .backup 创建一致性快照
 sqlite3 "$SOURCE_SCREENER" ".backup '$TMPDIR/screener.db'" 2>/dev/null
 sqlite3 "$SOURCE_REPORTS" ".backup '$TMPDIR/reports.db'" 2>/dev/null
 
-# 3. ECS 端：先复制现有文件到 .tmp，让 rsync 可以增量比对
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-  "$DEST_HOST" "cp $DEST_DIR/screener.db $DEST_DIR/screener.db.tmp 2>/dev/null; cp $DEST_DIR/reports.db $DEST_DIR/reports.db.tmp 2>/dev/null; true"
+SCREENER_OK=$(sqlite3 "$TMPDIR/screener.db" "PRAGMA integrity_check;" 2>&1)
+REPORTS_OK=$(sqlite3 "$TMPDIR/reports.db" "PRAGMA integrity_check;" 2>&1)
 
-# 4. rsync 增量推送到 .tmp（--inplace 直接更新 .tmp 文件，只传差异块）
+if [ "$SCREENER_OK" != "ok" ]; then
+  echo "$(date -Iseconds) $LOG_TAG L1 FAIL: screener integrity=$SCREENER_OK"
+  exit 1
+fi
+if [ "$REPORTS_OK" != "ok" ]; then
+  echo "$(date -Iseconds) $LOG_TAG L1 FAIL: reports integrity=$REPORTS_OK"
+  exit 1
+fi
+echo "$(date +%T) $LOG_TAG L1: integrity OK"
+
+MAC_SCREENER_SIZE=$(stat -f%z "$TMPDIR/screener.db")
+MAC_REPORTS_SIZE=$(stat -f%z "$TMPDIR/reports.db")
+
+# ─── L2: ECS端备份 → rsync → 大小校验 ────────────────
+echo "$(date +%T) $LOG_TAG L2: ecs backup + rsync"
+
+ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
+  "$DEST_HOST" "
+    cp $DEST_DIR/screener.db $DEST_DIR/screener.db.bak 2>/dev/null
+    cp $DEST_DIR/reports.db $DEST_DIR/reports.db.bak 2>/dev/null
+    cp $DEST_DIR/screener.db $DEST_DIR/screener.db.tmp 2>/dev/null
+    cp $DEST_DIR/reports.db $DEST_DIR/reports.db.tmp 2>/dev/null
+    true
+  "
+
 rsync -avz --checksum --inplace \
   -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10" \
-  "$TMPDIR/screener.db" "$DEST_HOST:$DEST_DIR/screener.db.tmp" \
-  2>&1
+  "$TMPDIR/screener.db" "$DEST_HOST:$DEST_DIR/screener.db.tmp" 2>&1
 
 rsync -avz --checksum --inplace \
   -e "ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10" \
-  "$TMPDIR/reports.db" "$DEST_HOST:$DEST_DIR/reports.db.tmp" \
-  2>&1
+  "$TMPDIR/reports.db" "$DEST_HOST:$DEST_DIR/reports.db.tmp" 2>&1
 
-# 5. 原子替换 + 重载（同文件系统 mv 是原子的，Dashboard 读到的是完整文件）
+ECS_SCREENER_SIZE=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 "$DEST_HOST" "stat -c%s $DEST_DIR/screener.db.tmp 2>/dev/null || echo 0")
+ECS_REPORTS_SIZE=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 "$DEST_HOST" "stat -c%s $DEST_DIR/reports.db.tmp 2>/dev/null || echo 0")
+
+if [ "$ECS_SCREENER_SIZE" != "$MAC_SCREENER_SIZE" ]; then
+  echo "$(date -Iseconds) $LOG_TAG L2 FAIL: screener size mismatch mac=$MAC_SCREENER_SIZE ecs=$ECS_SCREENER_SIZE"
+  exit 1
+fi
+if [ "$ECS_REPORTS_SIZE" != "$MAC_REPORTS_SIZE" ]; then
+  echo "$(date -Iseconds) $LOG_TAG L2 FAIL: reports size mismatch mac=$MAC_REPORTS_SIZE ecs=$ECS_REPORTS_SIZE"
+  exit 1
+fi
+echo "$(date +%T) $LOG_TAG L2: size matched screener=$ECS_SCREENER_SIZE reports=$ECS_REPORTS_SIZE"
+
+# ─── L3: 原子替换 → reload → 健康检查 → 失败回滚 ─────
+echo "$(date +%T) $LOG_TAG L3: atomic mv + reload + health"
+
 ssh -i "$SSH_KEY" -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 \
-  "$DEST_HOST" "mv $DEST_DIR/screener.db.tmp $DEST_DIR/screener.db && mv $DEST_DIR/reports.db.tmp $DEST_DIR/reports.db && pm2 reload dashboard --update-env" 2>/dev/null || true
+  "$DEST_HOST" "
+    mv $DEST_DIR/screener.db.tmp $DEST_DIR/screener.db
+    mv $DEST_DIR/reports.db.tmp $DEST_DIR/reports.db
+    pm2 reload dashboard --update-env 2>/dev/null
+  " || true
 
-echo "$(date): === sync done ==="
+# 等待 Dashboard 启动
+sleep 4
+
+# 健康检查
+HEALTH=$(ssh -i "$SSH_KEY" -o ConnectTimeout=10 "$DEST_HOST" \
+  "curl -sf --max-time 5 https://tiangong.uno/api/health 2>/dev/null" || echo '{"db_ok":false}')
+
+if echo "$HEALTH" | grep -q '"db_ok":true'; then
+  # 成功 → 清理备份
+  ssh -i "$SSH_KEY" -o ConnectTimeout=10 "$DEST_HOST" "rm -f $DEST_DIR/screener.db.bak $DEST_DIR/reports.db.bak" 2>/dev/null || true
+  ELAPSED=$(($(date +%s) - START_TS))
+  echo "$(date -Iseconds) $LOG_TAG L3 OK health=$HEALTH elapsed=${ELAPSED}s size=${ECS_SCREENER_SIZE}"
+else
+  # 失败 → 回滚
+  echo "$(date -Iseconds) $LOG_TAG L3 FAIL: health check failed, rolling back"
+  ssh -i "$SSH_KEY" -o ConnectTimeout=10 "$DEST_HOST" "
+    mv $DEST_DIR/screener.db.bak $DEST_DIR/screener.db 2>/dev/null
+    mv $DEST_DIR/reports.db.bak $DEST_DIR/reports.db 2>/dev/null
+    pm2 reload dashboard --update-env 2>/dev/null
+  " || true
+  ELAPSED=$(($(date +%s) - START_TS))
+  echo "$(date -Iseconds) $LOG_TAG L3 ROLLBACK elapsed=${ELAPSED}s"
+  exit 1
+fi
+
+echo "$(date -Iseconds) $LOG_TAG === done ==="
