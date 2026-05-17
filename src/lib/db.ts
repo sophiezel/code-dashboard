@@ -10,8 +10,8 @@ import {
   type Message, type BenchmarkComparison,
 } from "./types";
 
-const REPORTS_DB = process.env.DASHBOARD_REPORTS_DB || path.join(os.homedir(), "code/dashboard/data/reports.db");
-const SCREENER_DB = process.env.DASHBOARD_SCREENER_DB || path.join(os.homedir(), "code/stock-screener/data/screener.db");
+const REPORTS_DB = process.env.DASHBOARD_REPORTS_DB || process.env.REPORTS_DB_PATH || path.join(os.homedir(), "code/dashboard/data/reports.db");
+const SCREENER_DB = process.env.DASHBOARD_SCREENER_DB || process.env.SCREENER_DB_PATH || path.join(os.homedir(), "code/stock-screener/data/screener.db");
 
 // ── WAL mode singletons ────────────────────────────
 
