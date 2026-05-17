@@ -5,7 +5,7 @@ import { SparklineChart } from "@/components/mobile/sparkline";
 import { BarChart } from "@/components/mobile/bar-chart";
 import {
   TrendingUp, Activity, Globe, DollarSign,
-  Ship, Waves, Target, ArrowUpDown,
+  Ship, Waves, Target, ArrowUpDown, Info, Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ThemePool } from "@/lib/types";
@@ -148,6 +148,32 @@ export function MobileDashboardClient(props: Props) {
           <span className="text-lg">{decision.regimeEmoji}</span>
           <span className={cn("text-sm font-bold", decisionText)}>
             {decision.regime} · 仓位 {decision.positionPct}%
+            <span className="relative group/tip inline">
+              <span tabIndex={0} className="inline-flex items-center ml-1 cursor-help"><Info className="w-3 h-3 text-zinc-500 hover:text-zinc-300" /></span>
+              <div className="absolute left-1/2 -translate-x-1/2 top-5 w-72 max-w-[calc(100vw-2rem)] p-3 rounded-xl bg-zinc-900 border border-zinc-700 shadow-xl opacity-0 invisible group-hover/tip:opacity-100 group-hover/tip:visible transition-all duration-200 z-50">
+                <p className="text-[10px] font-semibold text-zinc-300 mb-2">决策引擎 · 因子加权链路</p>
+                <div className="text-[9px] leading-relaxed text-zinc-500 space-y-1.5">
+                  <div>
+                    <span className="text-zinc-400 font-medium">核心层 (加权求和 80%)</span><br/>
+                    <span className="text-zinc-600">宏观25% + 情绪25% + VIX15% + 融资15%</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-400 font-medium">增强层 (乘法调整 20%)</span><br/>
+                    <span className="text-zinc-600">北向流×0.6~1.2 + 情绪动量×0.75~1.15 + 杠杆×0.6~1.0 + 板块广度×0.8~1.1 + 主题资金×0.75~1.1</span>
+                  </div>
+                  <div className="pt-1 border-t border-zinc-800">
+                    <span className="text-zinc-400">输出:</span> composite ≥0.70→🟢进攻 / ≥0.45→🟡防御 / &lt;0.45→🔴观望
+                  </div>
+                  <div className="pt-1 border-t border-zinc-800">
+                    <span className="text-zinc-500">底线: 仓位不超过宏观建议上限</span>
+                  </div>
+                  <div className="pt-1 border-t border-zinc-800">
+                    <span className="text-zinc-400 font-medium">量化智能体</span><br/>
+                    <span className="text-zinc-600">每日09:05由6个GBDT/DL模型输出方向/IC/买卖信号。方向=看多/看空，IC&gt;0.05有效、&gt;0.10优秀，买卖=score&gt;5/&lt;2筛选机会广度。与决策条互补——规则给方向，模型给置信度。</span>
+                  </div>
+                </div>
+              </div>
+            </span>
           </span>
         </div>
         <p className="text-[10px] text-zinc-400 leading-relaxed">{decision.reason}</p>
@@ -164,8 +190,8 @@ export function MobileDashboardClient(props: Props) {
           </p>
         )}
         {quantBias && (
-          <p className="text-[9px] text-violet-400/80 mt-0.5 font-medium">
-            🤖 {quantBias}
+          <p className="text-[9px] text-violet-400/80 mt-0.5 font-medium inline-flex items-center gap-1">
+            <Brain className="w-3 h-3" />{quantBias}
           </p>
         )}
       </div>
