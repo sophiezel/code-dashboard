@@ -571,3 +571,30 @@ export function getLatestTotalTurnover(): number | null {
   ).get() as any;
   return row?.total ?? null;
 }
+
+/** Get latest daily close from versioned table (fallback to old table) */
+export function getLatestDailyClose(symbol: string): { close: number; trade_date: string; confidence: number } | null {
+  const db = getScreenerDb();
+  // Try stock_daily_latest first
+  let row = db.prepare(
+    "SELECT close, trade_date, confidence FROM stock_daily_latest WHERE symbol = ? ORDER BY trade_date DESC LIMIT 1"
+  ).get(symbol) as any;
+  if (row) return row;
+  // Fallback to old stock_daily
+  row = db.prepare(
+    "SELECT close, trade_date, NULL as confidence FROM stock_daily WHERE symbol = ? ORDER BY trade_date DESC LIMIT 1"
+  ).get(symbol) as any;
+  return row ?? null;
+}
+
+/** Get version statistics for latest trade date */
+export function getDailyV2Stats(): { trade_date: string; total: number; dual_source: number; avg_confidence: number } | null {
+  const db = getScreenerDb();
+  return db.prepare(
+    `SELECT trade_date, COUNT(*) as total,
+            SUM(CASE WHEN source_count >= 2 THEN 1 ELSE 0 END) as dual_source,
+            AVG(confidence) as avg_confidence
+     FROM stock_daily_v2
+     GROUP BY trade_date ORDER BY trade_date DESC LIMIT 1`
+  ).get() as any;
+}

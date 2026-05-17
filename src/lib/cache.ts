@@ -20,6 +20,7 @@ const TTL: Record<string, number> = {
   default: 30_000,        // 30s
   stock_daily: 60_000,    // 1min
   stock_daily_all: 60_000,
+  stock_daily_latest: 30_000,  // 30s (versioned, more volatile)
   stock_fundamental: 300_000,  // 5min
   stock_fund_flow: 60_000,
   sentiment_cache: 10_000,     // 10s
