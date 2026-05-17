@@ -17,6 +17,8 @@ import {
   getHsgtSectorTop,
   getEtfFlowTop,
   getLatestTotalTurnover,
+  getMarginBuyHistory,
+  getBlockTradeTop,
 } from "@/lib/db";
 import { MobileDashboardClient } from "./MobileDashboardClient";
 import { safeJsonParse } from "@/lib/utils";
@@ -198,6 +200,16 @@ export default function MobileDashboardPage() {
     return first && last ? ((last - first) / first * 100) : null;
   })();
 
+  // Margin buy + leverage
+  const marginBuyHist = getMarginBuyHistory(30);
+  const latestMarginBuy = marginBuyHist.length > 0 ? marginBuyHist[0].margin_buy : null;
+  const leverageRate = latestMarginBuy != null && marketTurnover != null
+    ? (latestMarginBuy / marketTurnover * 100)
+    : null;
+
+  // Block trades
+  const blockTrades = getBlockTradeTop(10);
+
   // North-bound stock TOP10 (from hsgt_stock_daily)
   const northStocks = getHsgtStockTop("北向", undefined, 10);
   const northTotalInflow = northStocks.reduce((sum, s) => sum + (s.net_inflow || 0), 0);
@@ -297,6 +309,13 @@ export default function MobileDashboardPage() {
       lhbTop5={lhb.slice(0, 5).map(r => ({
         symbol: r.symbol, name: r.name,
         pct_change: r.pct_change, net_amount: r.net_amount,
+        l_buy: r.l_buy, l_sell: r.l_sell, reason: r.reason,
+      }))}
+      latestMarginBuy={latestMarginBuy}
+      leverageRate={leverageRate}
+      blockTrades={blockTrades.map(b => ({
+        symbol: b.symbol, name: b.name,
+        price: b.price, volume: b.volume, amount: b.amount, close: b.close,
       }))}
       // M5: 北向
       northStocks={northStocks.map(s => ({

@@ -10,6 +10,7 @@ const SCREENER_DB = path.join(os.homedir(), "code/stock-screener/data/screener.d
 
 let _db: Database.Database | null = null;
 let _screenerDb: Database.Database | null = null;
+let _screenerReadonlyDb: Database.Database | null = null;
 
 function getDb(): Database.Database {
   if (_db) return _db;
@@ -31,6 +32,39 @@ function getScreenerDb(): Database.Database {
 
 // Export for shared use by auth/quant modules
 export { getScreenerDb };
+
+// ─── Read-only connection ────────────────────────────
+
+/** Path for SCREENER_DB, respecting env override */
+function getScreenerPath(): string {
+  if (process.env.SCREENER_DB_PATH) return process.env.SCREENER_DB_PATH;
+  return SCREENER_DB;
+}
+
+/**
+ * Open or return a cached read-only connection to screener.db.
+ * Uses URI-mode `?mode=ro` to enforce read-only at the SQLite level.
+ * This is safe to use concurrently with the writable connection.
+ */
+function connect_readonly(): Database.Database {
+  if (_screenerReadonlyDb) return _screenerReadonlyDb;
+  const dbPath = getScreenerPath();
+  const db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+  db.pragma("journal_mode = WAL");
+  db.pragma("busy_timeout = 5000");
+  _screenerReadonlyDb = db;
+  return db;
+}
+
+/**
+ * Get the shared read-only DB connection.
+ * Alias for connect_readonly() for consistency.
+ */
+function getReadonlyDB(): Database.Database {
+  return connect_readonly();
+}
+
+export { connect_readonly, getReadonlyDB };
 
 // ─── Reports ─────────────────────────────────────────
 
@@ -322,18 +356,38 @@ export function getMarginShortHistory(limit = 60): { trade_date: string; short_b
 }
 
 /** Get LHB (龙虎榜) top N for a date or latest */
-export function getLhbTop(date?: string, limit = 10): { trade_date: string; symbol: string; name: string; close: number; pct_change: number; net_amount: number; reason: string }[] {
+export function getLhbTop(date?: string, limit = 10): { trade_date: string; symbol: string; name: string; close: number; pct_change: number; net_amount: number; l_buy: number; l_sell: number; reason: string }[] {
   const db = getScreenerDb();
   if (date) {
     return db.prepare(
-      "SELECT trade_date, symbol, name, close, pct_change, net_amount, reason FROM lhb_daily WHERE trade_date = ? ORDER BY ABS(net_amount) DESC LIMIT ?"
+      "SELECT trade_date, symbol, name, close, pct_change, net_amount, l_buy, l_sell, reason FROM lhb_daily WHERE trade_date = ? ORDER BY ABS(net_amount) DESC LIMIT ?"
     ).all(date, limit) as any[];
   }
-  // Latest date
   const latest = db.prepare("SELECT MAX(trade_date) as d FROM lhb_daily").get() as any;
   if (!latest?.d) return [];
   return db.prepare(
-    "SELECT trade_date, symbol, name, close, pct_change, net_amount, reason FROM lhb_daily WHERE trade_date = ? ORDER BY ABS(net_amount) DESC LIMIT ?"
+    "SELECT trade_date, symbol, name, close, pct_change, net_amount, l_buy, l_sell, reason FROM lhb_daily WHERE trade_date = ? ORDER BY ABS(net_amount) DESC LIMIT ?"
+  ).all(latest.d, limit) as any[];
+}
+
+/** Get daily margin buy amount history for trend chart */
+export function getMarginBuyHistory(limit = 60): { trade_date: string; margin_buy: number; margin_balance: number }[] {
+  return getScreenerDb().prepare(
+    "SELECT trade_date, margin_buy, margin_balance FROM margin_daily ORDER BY trade_date DESC LIMIT ?"
+  ).all(limit) as any[];
+}
+
+/** Get block trade (大宗交易) top N, with disc/prem vs daily close */
+export function getBlockTradeTop(limit = 10): { trade_date: string; symbol: string; name: string; price: number; volume: number; amount: number; close: number | null }[] {
+  const db = getScreenerDb();
+  const latest = db.prepare("SELECT MAX(trade_date) as d FROM block_trades").get() as any;
+  if (!latest?.d) return [];
+  return db.prepare(
+    `SELECT b.trade_date, b.symbol, b.name, b.price, b.volume, b.amount, sd.close
+     FROM block_trades b
+     LEFT JOIN stock_daily sd ON b.symbol = sd.symbol AND b.trade_date = sd.trade_date
+     WHERE b.trade_date = ?
+     ORDER BY b.amount DESC LIMIT ?`
   ).all(latest.d, limit) as any[];
 }
 

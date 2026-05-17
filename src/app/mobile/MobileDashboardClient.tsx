@@ -61,6 +61,9 @@ interface Props {
   southNetBuy: number | null;
   southChartData: number[];
   lhbTop5: LhbStock[];
+  latestMarginBuy: number | null;
+  leverageRate: number | null;
+  blockTrades: { symbol: string; name: string; price: number; volume: number; amount: number }[];
   // M5: 北向资金 (restored)
   northStocks: NorthStock[];
   northTotalInflow: number;
@@ -106,6 +109,7 @@ export function MobileDashboardClient(props: Props) {
     marginBalance, marginChartData,
     shortBalance, marginTrend,
     southNetBuy, southChartData, lhbTop5,
+    latestMarginBuy, leverageRate, blockTrades,
     northStocks, northTotalInflow,
     southStocks, southTotalInflow,
     northSectors, etfFlows,
@@ -222,14 +226,20 @@ export function MobileDashboardClient(props: Props) {
         href="/mobile/index"
       />
 
-      {/* ──── M4: 资金全景 ──── */}
+      {/* ──── M4: 两融资金 ──── */}
       <ModuleCard label="M4" title="两融资金" accent="amber"
         icon={<DollarSign className="w-3.5 h-3.5 text-amber-400" />}
+        metric={marginBalance != null ? `${(marginBalance / 1e8).toFixed(0)}亿` : "--"}
+        metricSub={
+          <span className={marginTrend != null && marginTrend > 0 ? "text-emerald-400" : "text-rose-400"}>
+            {marginTrend != null ? `${marginTrend >= 0 ? "↑" : "↓"}${Math.abs(marginTrend).toFixed(1)}%(周)` : ""}
+          </span>
+        }
         subMetrics={[
-          { label: "两融", value: marginBalance != null ? `${(marginBalance / 1e8).toFixed(0)}亿` : "--", color: "amber" as const },
+          { label: "买入", value: latestMarginBuy != null ? `${(latestMarginBuy / 1e8).toFixed(0)}亿` : "--", color: "amber" as const },
           { label: "融券", value: shortBalance != null ? `${(shortBalance / 1e8).toFixed(0)}亿` : "--", color: "rose" as const },
-          { label: "周趋势", value: marginTrend != null ? `${marginTrend >= 0 ? "+" : ""}${marginTrend.toFixed(1)}%` : "--", color: marginTrend != null && marginTrend > 0 ? "emerald" as const : "rose" as const },
-          ...(lhbTop5.length > 0 ? [{ label: "龙虎榜", value: lhbTop5[0].name, color: "violet" as const }] : []),
+          { label: "杠杆率", value: leverageRate != null ? `${leverageRate.toFixed(1)}%` : "--", color: leverageRate != null && leverageRate > 12 ? "rose" as const : leverageRate != null && leverageRate > 8 ? "amber" as const : "emerald" as const },
+          ...(lhbTop5.length > 0 ? [{ label: "龙虎榜", value: `${lhbTop5[0].name} ${lhbTop5[0].net_amount >= 0 ? "+" : ""}${(lhbTop5[0].net_amount / 1e8).toFixed(1)}亿`, color: lhbTop5[0].net_amount >= 0 ? "emerald" as const : "rose" as const }] : []),
         ]}
         chart={marginChartData.length >= 2 ? <SparklineChart data={marginChartData.slice(-60)} color="#f59e0b" height={28} className="w-full h-7" /> : undefined}
         href="/mobile/flow"
