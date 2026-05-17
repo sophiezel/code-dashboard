@@ -24,11 +24,13 @@ interface Decision {
   positionPct: number;
   reason: string;
   focusThemes: string[];
+  subSignals: string[];
 }
 
 interface Props {
   // Decision
   decision: Decision;
+  quantBias: string | null;
   // M1
   macroScore: number | null;
   macroPosition: number | null;
@@ -98,10 +100,8 @@ function pctText(n: number | null): string {
   if (n == null) return "--";
   return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
 }
-
 export function MobileDashboardClient(props: Props) {
-  const {
-    decision,
+  const { decision, quantBias,
     macroScore, macroPosition,
     macroIndicatorKeys, macroIndicatorValues, macroChartData,
     sentimentScore, sentimentLimitUp, sentimentLimitUpRate,
@@ -154,6 +154,18 @@ export function MobileDashboardClient(props: Props) {
         {decision.focusThemes.length > 0 && (
           <p className="text-[10px] text-zinc-500 mt-1">
             关注: {decision.focusThemes.join(" · ")}
+          </p>
+        )}
+        {decision.subSignals.length > 0 && (
+          <p className="text-[9px] text-zinc-500 mt-0.5">
+            {decision.subSignals.map((s, i) => (
+              <span key={i} className={s.includes("⚠") ? "text-rose-400" : "text-zinc-500"}>{s}{i < decision.subSignals.length - 1 ? " · " : ""}</span>
+            ))}
+          </p>
+        )}
+        {quantBias && (
+          <p className="text-[9px] text-violet-400/80 mt-0.5 font-medium">
+            🤖 {quantBias}
           </p>
         )}
       </div>
