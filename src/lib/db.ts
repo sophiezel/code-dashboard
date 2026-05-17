@@ -732,17 +732,17 @@ export function getRiskOverview(): RiskOverview | null {
   ).get() as any;
   if (!row) return null;
   return {
-    var_95: row.var_95 ?? 0,
-    var_99: row.var_99 ?? 0,
-    cvar_95: row.cvar_95 ?? 0,
-    max_drawdown: row.max_drawdown ?? 0,
-    sector_concentration: row.sector_concentration ?? 0,
-    current_drawdown_pct: row.max_drawdown ?? 0,
-    total_drawdown_pct: row.max_drawdown ?? 0,
-    volatility: 0,       // risk_metrics 无此列
-    sharpe: 0,           // risk_metrics 无此列
+    var_95: Number(row.var_95 ?? 0),
+    var_99: Number(row.var_99 ?? 0),
+    cvar_95: Number(row.cvar_95 ?? 0),
+    max_drawdown: Number(row.max_drawdown ?? 0),
+    sector_concentration: Number(row.sector_concentration ?? 0),
+    current_drawdown_pct: Number(row.max_drawdown ?? 0),
+    total_drawdown_pct: Number(row.max_drawdown ?? 0),
+    volatility: 0,
+    sharpe: 0,
     max_consecutive_losses: 0,
-    update_time: row.trade_date ?? "",  // alias
+    update_time: String(row.trade_date ?? ""),
   } as RiskOverview;
 }
 
