@@ -267,6 +267,27 @@ export function SentimentClient({
           </div>
         </div>
       )}
+
+      {/* ── 指标详解 ── */}
+      <details className="rounded-xl border border-zinc-800 bg-zinc-900/50 overflow-hidden">
+        <summary className="p-3 text-xs font-medium text-zinc-400 list-none cursor-pointer">📖 指标详解</summary>
+        <div className="px-3 pb-3 space-y-2 text-[10px] leading-relaxed">
+          {[
+            { k: "情绪评分", d: "综合涨停家数、涨跌比、炸板率加权计算(0-100)。>60=乐观, 40-60=中性, <40=悲观。连续3日>80或<20=极端情绪→反转概率升高。" },
+            { k: "涨停率", d: "涨停家数/全市场股票数。>5%=市场过热→次日炸板潮风险；<0.3%=极度冰点→短线反弹概率大。正常区间: 0.5-3%。" },
+            { k: "涨跌比", d: "上涨家数/下跌家数。>2:1=普涨行情, <0.5:1=普跌行情。指数不跌但涨跌比<1→权重护盘，小票崩盘。正常区间: 0.8-1.5。" },
+            { k: "炸板率", d: "炸板数/(涨停+炸板)。>30%=涨停封板失败率高→打板风险大；<10%=封板质量好→短线情绪强。" },
+            { k: "VIX", d: "标普500波动率指数(恐慌指数)。>30=市场恐慌→避险；20-25=正常；<15=过度平静→警惕黑天鹅。VIX飙升+股市下跌=恐慌出逃。" },
+            { k: "周度delta", d: "本周情绪评分-上周情绪评分。正值=情绪回暖，负值=情绪恶化。>+10=快速转暖(追涨信号)；<-10=快速恶化(减仓信号)。" },
+            { k: "分位", d: "当前情绪评分在历史中的百分位排名。>80%分位=情绪处于历史高位→可能过热；<20%分位=情绪处于历史低位→可能见底。" },
+          ].map(t => (
+            <div key={t.k} className="bg-zinc-800/40 rounded-lg p-2">
+              <span className="font-medium text-zinc-300">{t.k}</span>
+              <p className="text-zinc-500 mt-0.5">{t.d}</p>
+            </div>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

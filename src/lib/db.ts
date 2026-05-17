@@ -445,3 +445,13 @@ export function getShiborHistory(limit = 60): { trade_date: string; value: numbe
     'SELECT "日期" as trade_date, "O/N-定价" as value FROM macro_shibor ORDER BY "日期" DESC LIMIT ?'
   ).all(limit) as any[];
 }
+
+// ─── Market Turnover ────────────────────────────
+
+export function getLatestTotalTurnover(): number | null {
+  const db = getScreenerDb();
+  const row = db.prepare(
+    "SELECT SUM(volume * close) as total FROM stock_daily WHERE trade_date = (SELECT MAX(trade_date) FROM stock_daily) AND volume > 0 AND close > 0"
+  ).get() as any;
+  return row?.total ?? null;
+}

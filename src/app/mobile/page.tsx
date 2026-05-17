@@ -16,6 +16,7 @@ import {
   getHsgtStockTop,
   getHsgtSectorTop,
   getEtfFlowTop,
+  getLatestTotalTurnover,
 } from "@/lib/db";
 import { MobileDashboardClient } from "./MobileDashboardClient";
 import { safeJsonParse } from "@/lib/utils";
@@ -156,6 +157,20 @@ export default function MobileDashboardPage() {
     : limitUpRate < 0.002 && limitUpRate > 0 ? "冰点反转信号"
     : null;
 
+  // ── M2 enhancements: delta + percentile + turnover ──
+  const historyScores = [...sentimentHistory].reverse().map(s => s.score);
+  const sentCurrent = sentiment?.score ?? null;
+  const sentWeekAgo = historyScores.length > 5 ? historyScores[historyScores.length - 6] : null;
+  const sentMonthAgo = historyScores.length > 22 ? historyScores[historyScores.length - 23] : null;
+  const sentDeltaWeek = sentCurrent != null && sentWeekAgo != null ? sentCurrent - sentWeekAgo : null;
+  const sentDeltaMonth = sentCurrent != null && sentMonthAgo != null ? sentCurrent - sentMonthAgo : null;
+  // Percentile: what % of history is lower than current?
+  const sentPercentile = sentCurrent != null && historyScores.length > 1
+    ? Math.round(historyScores.filter(s => s < sentCurrent).length / historyScores.length * 100)
+    : null;
+  // Turnover
+  const marketTurnover = getLatestTotalTurnover();
+
   // M3
   const domesticIndices = [
     { label: "上证指数", ...indexPct("IDX_000001", false) },
@@ -265,6 +280,10 @@ export default function MobileDashboardPage() {
       bustRate={bustRate}
       sentimentChartData={[...sentimentHistory].reverse().map(s => s.score)}
       vixClose={vix?.close ?? null}
+      sentDeltaWeek={sentDeltaWeek}
+      sentDeltaMonth={sentDeltaMonth}
+      sentPercentile={sentPercentile}
+      marketTurnover={marketTurnover}
       // M3
       domesticIndices={domesticIndices}
       globalIndices={globalIndices}

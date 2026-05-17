@@ -45,6 +45,11 @@ interface Props {
   bustRate: number | null;
   sentimentChartData: number[];
   vixClose: number | null;
+  // M2 enhancements
+  sentDeltaWeek: number | null;
+  sentDeltaMonth: number | null;
+  sentPercentile: number | null;
+  marketTurnover: number | null;
   // M3
   domesticIndices: IndexSnapshot[];
   globalIndices: IndexSnapshot[];
@@ -96,6 +101,7 @@ export function MobileDashboardClient(props: Props) {
     sentimentScore, sentimentLimitUp, sentimentLimitUpRate,
     sentimentAlert, advDeclRatio, bustRate,
     sentimentChartData, vixClose,
+    sentDeltaWeek, sentDeltaMonth, sentPercentile, marketTurnover,
     domesticIndices, globalIndices,
     marginBalance, marginChartData,
     shortBalance, marginTrend,
@@ -164,7 +170,16 @@ export function MobileDashboardClient(props: Props) {
         accent={sentimentScore && sentimentScore >= 60 ? "emerald" : sentimentScore && sentimentScore >= 40 ? "amber" : "rose"}
         icon={<Activity className="w-3.5 h-3.5" />}
         metric={sentimentScore ?? "--"}
-        metricSub={sentimentScore !== null ? (sentimentScore >= 60 ? "乐观" : sentimentScore >= 40 ? "中性" : "悲观") : undefined}
+        metricSub={
+          <>
+            {sentimentScore !== null ? (sentimentScore >= 60 ? "乐观" : sentimentScore >= 40 ? "中性" : "悲观") : ""}
+            {sentDeltaWeek != null && (
+              <span className={sentDeltaWeek >= 3 ? "text-emerald-400" : sentDeltaWeek <= -3 ? "text-rose-400" : "text-zinc-500"}>
+                {" "}{sentDeltaWeek >= 0 ? "↑" : "↓"}{Math.abs(sentDeltaWeek)}(周)
+              </span>
+            )}
+          </>
+        }
         badge={sentimentAlert || undefined}
         subMetrics={[
           { label: "涨停", value: `${sentimentLimitUp}家`, color: "emerald" as const },
@@ -172,6 +187,8 @@ export function MobileDashboardClient(props: Props) {
           { label: "涨跌比", value: advDeclRatio != null ? advDeclRatio.toFixed(2) : "--", color: advDeclRatio != null && advDeclRatio > 2 ? "emerald" as const : advDeclRatio != null && advDeclRatio < 0.5 ? "rose" as const : "amber" as const },
           { label: "炸板率", value: bustRate != null ? `${(bustRate * 100).toFixed(0)}%` : "--", color: bustRate != null && bustRate > 0.3 ? "rose" as const : "emerald" as const },
           { label: "VIX", value: vixClose?.toFixed(1) ?? "--", color: vixClose && vixClose > 25 ? "rose" as const : "emerald" as const },
+          ...(marketTurnover != null ? [{ label: "成交", value: `${(marketTurnover / 1e12).toFixed(2)}万亿`, color: "blue" as const }] : []),
+          ...(sentPercentile != null ? [{ label: "分位", value: `>${sentPercentile}%`, color: sentPercentile > 80 ? "rose" as const : sentPercentile < 20 ? "emerald" as const : "amber" as const }] : []),
         ]}
         chart={sentimentChartData.length >= 2 ? <SparklineChart data={sentimentChartData.slice(-30)} color={sentimentColor} height={28} className="w-full h-7" /> : undefined}
         href="/mobile/sentiment"

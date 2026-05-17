@@ -14,7 +14,7 @@ interface ModuleCardProps {
   /** Primary metric display */
   metric?: string | number;
   /** Metric subtitle / unit */
-  metricSub?: string;
+  metricSub?: React.ReactNode;
   /** Sub-metrics (optional row of small stats) */
   subMetrics?: { label: string; value: string; color?: string }[];
   /** Mini chart (optional) */
