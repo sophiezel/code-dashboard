@@ -29,6 +29,17 @@ function severityDot(severity: string): string {
 }
 
 export function RiskClient({ overview, events }: Props) {
+  // 安全默认值，防止 RSC 序列化丢字段
+  const o = overview ? {
+    total_drawdown_pct: overview.total_drawdown_pct ?? 0,
+    current_drawdown_pct: overview.current_drawdown_pct ?? 0,
+    var_95: overview.var_95 ?? 0,
+    volatility: overview.volatility ?? 0,
+    sharpe: overview.sharpe ?? 0,
+    max_consecutive_losses: overview.max_consecutive_losses ?? 0,
+    update_time: overview.update_time ?? "",
+  } : null;
+
   return (
     <div className="space-y-3 pb-2">
       <div className="flex items-center gap-2 mb-1">
@@ -37,20 +48,20 @@ export function RiskClient({ overview, events }: Props) {
       </div>
 
       {/* Overview card */}
-      {overview ? (
+      {o ? (
         <ModuleCard
-          label="风控概览" title={`更新 ${overview.update_time?.slice(0, 10) ?? "--"}`}
+          label="风控概览" title={`更新 ${o.update_time?.slice(0, 10) ?? "--"}`}
           accent="rose"
           icon={<Shield className="w-3.5 h-3.5 text-rose-400" />}
           body={
             <div className="grid grid-cols-2 gap-2">
               {[
-                { label: "总回撤", value: `${overview.total_drawdown_pct.toFixed(2)}%`, color: overview.total_drawdown_pct < -15 ? "rose" as const : overview.total_drawdown_pct < -10 ? "amber" as const : "emerald" as const },
-                { label: "当前回撤", value: `${overview.current_drawdown_pct.toFixed(2)}%`, color: overview.current_drawdown_pct < -10 ? "rose" as const : overview.current_drawdown_pct < -5 ? "amber" as const : "emerald" as const },
-                { label: "VaR(95%)", value: `${(overview.var_95 * 100).toFixed(2)}%`, color: overview.var_95 > 0.03 ? "rose" as const : overview.var_95 > 0.02 ? "amber" as const : "emerald" as const },
-                { label: "波动率", value: `${(overview.volatility * 100).toFixed(2)}%`, color: overview.volatility > 0.3 ? "rose" as const : overview.volatility > 0.2 ? "amber" as const : "emerald" as const },
-                { label: "Sharpe", value: overview.sharpe.toFixed(2), color: overview.sharpe > 1.5 ? "emerald" as const : overview.sharpe > 0.8 ? "amber" as const : "rose" as const },
-                { label: "最大连亏", value: `${overview.max_consecutive_losses}天`, color: overview.max_consecutive_losses > 7 ? "rose" as const : overview.max_consecutive_losses > 4 ? "amber" as const : "emerald" as const },
+                { label: "总回撤", value: `${o.total_drawdown_pct.toFixed(2)}%`, color: o.total_drawdown_pct < -15 ? "rose" as const : o.total_drawdown_pct < -10 ? "amber" as const : "emerald" as const },
+                { label: "当前回撤", value: `${o.current_drawdown_pct.toFixed(2)}%`, color: o.current_drawdown_pct < -10 ? "rose" as const : o.current_drawdown_pct < -5 ? "amber" as const : "emerald" as const },
+                { label: "VaR(95%)", value: `${(o.var_95 * 100).toFixed(2)}%`, color: o.var_95 > 0.03 ? "rose" as const : o.var_95 > 0.02 ? "amber" as const : "emerald" as const },
+                { label: "波动率", value: `${(o.volatility * 100).toFixed(2)}%`, color: o.volatility > 0.3 ? "rose" as const : o.volatility > 0.2 ? "amber" as const : "emerald" as const },
+                { label: "Sharpe", value: o.sharpe.toFixed(2), color: o.sharpe > 1.5 ? "emerald" as const : o.sharpe > 0.8 ? "amber" as const : "rose" as const },
+                { label: "最大连亏", value: `${o.max_consecutive_losses}天`, color: o.max_consecutive_losses > 7 ? "rose" as const : o.max_consecutive_losses > 4 ? "amber" as const : "emerald" as const },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between px-2 py-1.5 rounded-lg bg-zinc-800/30">
                   <span className="text-[9px] text-zinc-500">{item.label}</span>
