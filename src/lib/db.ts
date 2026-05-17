@@ -791,3 +791,38 @@ export function getBenchmarkComparison(): BenchmarkComparison[] {
     "SELECT * FROM benchmark_comparison ORDER BY CASE period WHEN '1周' THEN 1 WHEN '1月' THEN 2 WHEN '3月' THEN 3 WHEN '6月' THEN 4 WHEN '1年' THEN 5 ELSE 6 END"
   ).all() as BenchmarkComparison[];
 }
+
+// ═══════════════════════════════════════════════════════════════
+// Stub exports for pre-existing pages (avoid import errors)
+// ═══════════════════════════════════════════════════════════════
+
+export function getRecPerformance(limit = 20) {
+  try { return getScreenerDb().prepare("SELECT * FROM rec_performance ORDER BY rec_date DESC LIMIT ?").all(limit); }
+  catch { return []; }
+}
+export function getRecPerformanceSummary() { return { total: 0, win_rate: 0, avg_return_5d: 0 }; }
+export function getPortfolioNavHistory(limit = 60) {
+  try { return getScreenerDb().prepare("SELECT trade_date, nav, daily_return FROM portfolio_nav ORDER BY trade_date DESC LIMIT ?").all(limit); }
+  catch { return []; }
+}
+export function getRiskMetrics(limit = 60) {
+  try { return getScreenerDb().prepare("SELECT * FROM risk_metrics ORDER BY trade_date DESC LIMIT ?").all(limit); }
+  catch { return []; }
+}
+export function getLatestHsgt() {
+  try { return getScreenerDb().prepare("SELECT * FROM hsgt_daily ORDER BY trade_date DESC LIMIT 1").get(); }
+  catch { return null; }
+}
+export function getLatestMargin() {
+  try { return getScreenerDb().prepare("SELECT * FROM margin_daily ORDER BY trade_date DESC LIMIT 1").get(); }
+  catch { return null; }
+}
+export function getFuturesLatest(symbols: string[] = []) {
+  try {
+    if (!symbols.length) return [];
+    const placeholders = symbols.map(() => '?').join(',');
+    return getScreenerDb().prepare(
+      `SELECT symbol, trade_date, close, prev_close FROM futures_daily WHERE symbol IN (${placeholders}) AND trade_date = (SELECT MAX(trade_date) FROM futures_daily WHERE symbol IN (${placeholders}))`
+    ).all(...symbols);
+  } catch { return []; }
+}
