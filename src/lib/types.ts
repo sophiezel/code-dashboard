@@ -219,6 +219,37 @@ export interface BenchmarkComparison {
   information_ratio: number;
 }
 
+/** Recommendation (荐股) from recommendation_history table */
+export interface Recommendation {
+  id: number;
+  symbol: string;
+  name: string;
+  market: 'A' | 'HK';
+  strategy_type: 'long_term' | 'short_term';
+  status: string;
+  entry_date: string;
+  entry_avg_price: number;
+  exit_date: string | null;
+  exit_reason: string | null;
+  pnl: number;
+  pnl_pct: number;
+  score: number;
+  total_shares: number;
+  total_amount: number;
+  comment: string | null;
+}
+
+/** Strategy performance row */
+export interface StrategyPerf {
+  market: string;
+  strategy_type: string;
+  total_trades: number;
+  wins: number;
+  avg_return: number;
+  avg_win: number;
+  avg_loss: number;
+}
+
 /** Paper portfolio summary */
 export interface PaperPortfolio {
   total_market_value: number;

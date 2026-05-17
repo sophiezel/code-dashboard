@@ -29,15 +29,15 @@ function severityDot(severity: string): string {
 }
 
 export function RiskClient({ overview, events }: Props) {
-  // 安全默认值，防止 RSC 序列化丢字段
+  // 安全默认值：Number()||0 比 ??0 更强，可防 undefined/NaN/string
   const o = overview ? {
-    total_drawdown_pct: overview.total_drawdown_pct ?? 0,
-    current_drawdown_pct: overview.current_drawdown_pct ?? 0,
-    var_95: overview.var_95 ?? 0,
-    volatility: overview.volatility ?? 0,
-    sharpe: overview.sharpe ?? 0,
-    max_consecutive_losses: overview.max_consecutive_losses ?? 0,
-    update_time: overview.update_time ?? "",
+    total_drawdown_pct: Number(overview.total_drawdown_pct) || 0,
+    current_drawdown_pct: Number(overview.current_drawdown_pct) || 0,
+    var_95: Number(overview.var_95) || 0,
+    volatility: Number(overview.volatility) || 0,
+    sharpe: Number(overview.sharpe) || 0,
+    max_consecutive_losses: Number(overview.max_consecutive_losses) || 0,
+    update_time: String(overview.update_time || ""),
   } : null;
 
   return (

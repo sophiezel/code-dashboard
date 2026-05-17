@@ -9,9 +9,9 @@ import {
 
 const tabs = [
   { href: "/mobile", label: "概览", icon: LayoutDashboard },
+  { href: "/mobile/picks", label: "荐股", icon: Sparkles },
   { href: "/mobile/trading", label: "交易", icon: TrendingUp },
   { href: "/mobile/messages", label: "消息", icon: Bell },
-  { href: "/mobile/picks", label: "荐股", icon: Sparkles },
 ];
 
 export function BottomNav() {

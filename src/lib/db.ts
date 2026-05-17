@@ -800,6 +800,53 @@ export function getBenchmarkComparison(): BenchmarkComparison[] {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// Trading Module — Recommendation History (推荐历史)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get active (open) recommendations, optionally filtered by market/strategy */
+export function getActiveRecommendations(market?: string, strategyType?: string): any[] {
+  let sql = "SELECT * FROM recommendation_history WHERE status='active'";
+  const params: any[] = [];
+  if (market) { sql += " AND market=?"; params.push(market); }
+  if (strategyType) { sql += " AND strategy_type=?"; params.push(strategyType); }
+  sql += " ORDER BY entry_date DESC";
+  try {
+    return getScreenerDb().prepare(sql).all(...params) as any[];
+  } catch { return []; }
+}
+
+/** Get closed recommendation history, optionally filtered */
+export function getRecommendationHistory(market?: string, strategyType?: string, limit = 50): any[] {
+  let sql = "SELECT * FROM recommendation_history WHERE status!='active'";
+  const params: any[] = [];
+  if (market) { sql += " AND market=?"; params.push(market); }
+  if (strategyType) { sql += " AND strategy_type=?"; params.push(strategyType); }
+  sql += " ORDER BY exit_date DESC LIMIT ?";
+  params.push(limit);
+  try {
+    return getScreenerDb().prepare(sql).all(...params) as any[];
+  } catch { return []; }
+}
+
+/** Get strategy performance grouped by market and strategy_type */
+export function getStrategyPerformance(): any[] {
+  try {
+    return getScreenerDb().prepare(`
+      SELECT market, strategy_type,
+        COUNT(*) as total_trades,
+        SUM(CASE WHEN pnl_pct > 0 THEN 1 ELSE 0 END) as wins,
+        ROUND(AVG(pnl_pct), 2) as avg_return,
+        ROUND(AVG(CASE WHEN pnl_pct > 0 THEN pnl_pct ELSE NULL END), 2) as avg_win,
+        ROUND(AVG(CASE WHEN pnl_pct <= 0 THEN pnl_pct ELSE NULL END), 2) as avg_loss
+      FROM recommendation_history
+      WHERE status IN ('closed','stopped_out','time_exit','take_profit')
+      GROUP BY market, strategy_type
+      ORDER BY market, strategy_type
+    `).all() as any[];
+  } catch { return []; }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Stub exports for pre-existing pages (avoid import errors)
 // ═══════════════════════════════════════════════════════════════
 
