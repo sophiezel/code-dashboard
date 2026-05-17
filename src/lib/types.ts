@@ -51,3 +51,20 @@ export interface HsgtStockItem {
   net_inflow: number;   // 持股市值变化，单位元
   change_pct: number;
 }
+
+export interface HsgtSectorItem {
+  sector: string;
+  total_net_buy: number;
+  buy_count: number;
+  sell_count: number;
+  top_buy_name: string | null;
+  top_buy_value: number | null;
+}
+
+export interface EtfFlowItem {
+  symbol: string;
+  name: string;
+  etf_type: string;
+  pct_change: number;
+  fund_size: number;
+}

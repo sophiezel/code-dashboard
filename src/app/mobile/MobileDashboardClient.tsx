@@ -62,6 +62,10 @@ interface Props {
   // South stocks (matching north format)
   southStocks: NorthStock[];
   southTotalInflow: number;
+  // Sector aggregation
+  northSectors: { sector: string; total_net_buy: number; buy_count: number; sell_count: number }[];
+  // ETF flows
+  etfFlows: { symbol: string; name: string; etf_type: string; pct_change: number }[];
   // M6: 外围市场
   kwebPct: number | null;
   futures: FuturesSnapshot[];
@@ -98,6 +102,7 @@ export function MobileDashboardClient(props: Props) {
     southNetBuy, southChartData, lhbTop5,
     northStocks, northTotalInflow,
     southStocks, southTotalInflow,
+    northSectors, etfFlows,
     kwebPct, futures,
     themePool,
     latestPicks, latestBuy, latestReview,
@@ -217,47 +222,49 @@ export function MobileDashboardClient(props: Props) {
       <ModuleCard label="M5" title="资金流向" accent="blue"
         icon={<ArrowUpDown className="w-3.5 h-3.5 text-blue-400" />}
         body={
-          <div className="space-y-2">
-            {/* 北向 */}
-            <div>
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-[10px] text-zinc-500">北向</span>
-                <span className="text-sm font-bold tabular-nums text-blue-400">{formatBillions(northTotalInflow)}</span>
-                <span className="text-[9px] text-zinc-600">持股市值变化</span>
+          <div className="space-y-1.5">
+            {/* 北向板块 */}
+            {northSectors.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap text-[10px]">
+                <span className="text-zinc-500 text-[9px]">北向板块</span>
+                {northSectors.slice(0, 3).map(s => (
+                  <span key={s.sector} className={cn("tabular-nums", s.total_net_buy >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                    {s.sector}{s.total_net_buy >= 0 ? "+" : ""}{(s.total_net_buy/1e8).toFixed(1)}亿
+                  </span>
+                ))}
               </div>
-              {northStocks.length > 0 ? (
-                <div className="space-y-0.5">
-                  {northStocks.slice(0, 3).map(s => (
-                    <div key={s.symbol} className="flex items-center gap-2 text-[10px]">
-                      <span className="font-mono text-zinc-500 w-10">{s.symbol}</span>
-                      <span className={cn("tabular-nums", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatBillions(s.net_inflow)}</span>
-                      <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : <span className="text-[9px] text-zinc-600">回补中</span>}
+            )}
+            {/* 北向个股 */}
+            <div className="flex items-center gap-1 flex-wrap text-[10px]">
+              <span className="text-zinc-500 text-[9px]">北向</span>
+              <span className={cn("tabular-nums font-semibold", northTotalInflow >= 0 ? "text-blue-400" : "text-rose-400")}>{formatBillions(northTotalInflow)}</span>
+              {northStocks.slice(0, 3).map(s => (
+                <span key={s.symbol} className="tabular-nums text-zinc-400">
+                  {s.symbol} {formatBillions(s.net_inflow)}
+                </span>
+              ))}
             </div>
-            {/* 分隔 */}
-            <div className="border-t border-zinc-800/50" />
-            {/* 南向 */}
-            <div>
-              <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-[10px] text-zinc-500">南向</span>
-                <span className="text-sm font-bold tabular-nums text-violet-400">{formatBillions(southTotalInflow)}</span>
-                <span className="text-[9px] text-zinc-600">持股市值变化</span>
+            {/* 南向个股 */}
+            <div className="flex items-center gap-1 flex-wrap text-[10px]">
+              <span className="text-zinc-500 text-[9px]">南向</span>
+              <span className={cn("tabular-nums font-semibold", southTotalInflow >= 0 ? "text-violet-400" : "text-rose-400")}>{formatBillions(southTotalInflow)}</span>
+              {southStocks.slice(0, 3).map(s => (
+                <span key={s.symbol} className="tabular-nums text-zinc-400">
+                  {s.symbol} {formatBillions(s.net_inflow)}
+                </span>
+              ))}
+            </div>
+            {/* ETF */}
+            {etfFlows.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap text-[10px] border-t border-zinc-800/50 pt-1.5">
+                <span className="text-zinc-500 text-[9px]">ETF</span>
+                {etfFlows.slice(0, 4).map(e => (
+                  <span key={e.symbol} className={cn("tabular-nums", e.pct_change >= 0 ? "text-emerald-400" : "text-rose-400")}>
+                    {e.name.length > 4 ? e.name.slice(0, 4) : e.name}{pctText(e.pct_change)}
+                  </span>
+                ))}
               </div>
-              {southStocks.length > 0 ? (
-                <div className="space-y-0.5">
-                  {southStocks.slice(0, 3).map(s => (
-                    <div key={s.symbol} className="flex items-center gap-2 text-[10px]">
-                      <span className="font-mono text-zinc-500 w-10">{s.symbol}</span>
-                      <span className={cn("tabular-nums", s.net_inflow >= 0 ? "text-emerald-400" : "text-rose-400")}>{formatBillions(s.net_inflow)}</span>
-                      <span className={cn("tabular-nums ml-auto", s.change_pct >= 0 ? "text-emerald-400" : "text-rose-400")}>{pctText(s.change_pct)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : <span className="text-[9px] text-zinc-600">回补中</span>}
-            </div>
+            )}
           </div>
         }
         href="/mobile/flow"

@@ -14,6 +14,8 @@ import {
   getLatestFutures,
   getHsgtByDirection,
   getHsgtStockTop,
+  getHsgtSectorTop,
+  getEtfFlowTop,
 } from "@/lib/db";
 import { MobileDashboardClient } from "./MobileDashboardClient";
 import { safeJsonParse } from "@/lib/utils";
@@ -187,6 +189,10 @@ export default function MobileDashboardPage() {
   // South-bound stock TOP10
   const southStocks = getHsgtStockTop("南向", undefined, 10);
   const southTotalInflow = southStocks.reduce((sum, s) => sum + (s.net_inflow || 0), 0);
+  // Sector aggregation
+  const northSectors = getHsgtSectorTop("北向", undefined, 5);
+  // ETF flows
+  const etfFlows = getEtfFlowTop(6);
 
   // M7: KWEB + futures
   const kwebPct = indexPct("KWEB", true).pct;
@@ -269,6 +275,14 @@ export default function MobileDashboardPage() {
         net_inflow: s.net_inflow, change_pct: s.change_pct,
       }))}
       southTotalInflow={southTotalInflow}
+      northSectors={northSectors.map(s => ({
+        sector: s.sector, total_net_buy: s.total_net_buy,
+        buy_count: s.buy_count, sell_count: s.sell_count,
+      }))}
+      etfFlows={etfFlows.map(e => ({
+        symbol: e.symbol, name: e.name,
+        etf_type: e.etf_type, pct_change: e.pct_change,
+      }))}
       // M6
       kwebPct={kwebPct}
       futures={futures}

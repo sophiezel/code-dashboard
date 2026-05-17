@@ -379,3 +379,37 @@ export function getHsgtStockTop(direction: "北向" | "南向", date?: string, l
     "SELECT trade_date, symbol, rank, net_inflow, change_pct FROM hsgt_stock_daily WHERE direction = ? AND trade_date = ? ORDER BY rank LIMIT ?"
   ).all(direction, latest.d, limit) as any[];
 }
+
+// ─── HSGT Sector Aggregation ──────────────────────
+
+export function getHsgtSectorTop(direction: "北向" | "南向", date?: string, limit = 5): {
+  sector: string; total_net_buy: number; buy_count: number; sell_count: number;
+  top_buy_name: string | null; top_buy_value: number | null;
+}[] {
+  const db = getScreenerDb();
+  if (date) {
+    return db.prepare(
+      "SELECT sector, total_net_buy, buy_count, sell_count, top_buy_name, top_buy_value FROM hsgt_sector_daily WHERE direction = ? AND trade_date = ? ORDER BY ABS(total_net_buy) DESC LIMIT ?"
+    ).all(direction, date, limit) as any[];
+  }
+  const latest = db.prepare(
+    "SELECT MAX(trade_date) as d FROM hsgt_sector_daily WHERE direction = ?"
+  ).get(direction) as any;
+  if (!latest?.d) return [];
+  return db.prepare(
+    "SELECT sector, total_net_buy, buy_count, sell_count, top_buy_name, top_buy_value FROM hsgt_sector_daily WHERE direction = ? AND trade_date = ? ORDER BY ABS(total_net_buy) DESC LIMIT ?"
+  ).all(direction, latest.d, limit) as any[];
+}
+
+// ─── ETF Flow ─────────────────────────────────────
+
+export function getEtfFlowTop(limit = 6): {
+  symbol: string; name: string; etf_type: string; pct_change: number; fund_size: number;
+}[] {
+  const db = getScreenerDb();
+  const latest = db.prepare("SELECT MAX(trade_date) as d FROM etf_flow_daily").get() as any;
+  if (!latest?.d) return [];
+  return db.prepare(
+    "SELECT symbol, name, etf_type, pct_change, fund_size FROM etf_flow_daily WHERE trade_date = ? ORDER BY ABS(pct_change) DESC LIMIT ?"
+  ).all(latest.d, limit) as any[];
+}
