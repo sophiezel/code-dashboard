@@ -82,8 +82,8 @@ TABLE_SLA = [
     # ("bond_yield","date","daily_close",0,1440,3600),
     # Full coverage tables
     ("quant_signals","trade_date","daily_close",960,1440,600),
-    ("portfolio_nav","date","daily_close",960,1440,600),
-    ("etl_metrics","ts","daily_close",960,1440,600),
+    ("portfolio_nav","trade_date","daily_close",960,1440,600),
+    ("etl_metrics","started_at","daily_close",960,1440,600),
     ("data_provenance",None,"static",0,1440,3600),
 ]
 
