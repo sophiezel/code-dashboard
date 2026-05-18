@@ -242,9 +242,9 @@ export default function MobileDashboardPage() {
     return first && last ? ((last - first) / first * 100) : null;
   })();
 
-  // Margin buy + leverage
+  // Margin buy + leverage (skip NULL rows from incomplete trading day)
   const marginBuyHist = getMarginBuyHistory(30);
-  const latestMarginBuy = marginBuyHist.length > 0 ? marginBuyHist[0].margin_buy : null;
+  const latestMarginBuy = marginBuyHist.find(r => r.margin_buy != null)?.margin_buy ?? null;
   const leverageRate = latestMarginBuy != null && marketTurnover != null
     ? (latestMarginBuy / marketTurnover * 100)
     : null;

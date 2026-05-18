@@ -7,8 +7,9 @@ import {
   getReportCount,
   getLatestReportByType,
 } from "@/lib/db";
+import { getLatestQuantSignal } from "@/lib/quant-db";
 import { typeLabel, formatDate } from "@/lib/utils";
-import { TrendingUp, Activity, FileText, Shield } from "lucide-react";
+import { TrendingUp, Activity, FileText, Shield, Brain, BarChart3 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 60;
@@ -40,6 +41,33 @@ export default function HomePage() {
   const macroScoreDisplay = macro ? macro.score.toFixed(1) : "--";
 
   const sentimentScoreDisplay = sentiment ? sentiment.score : "--";
+
+  // ── Quant signals ──
+  const quant = getLatestQuantSignal();
+  const quantIC = quant?.ensemble_ic?.toFixed(2) ?? "--";
+  const quantBias = quant?.prediction_bias ?? "--";
+  const quantBuys = quant?.buy_signals ?? 0;
+  const quantSells = quant?.sell_signals ?? 0;
+  const quantTotal = quant?.total_stocks ?? 0;
+  const quantBestModel = (() => {
+    if (!quant) return null;
+    const ics = [
+      { name: "CatBoost", ic: quant.catboost_ic },
+      { name: "XGBoost", ic: quant.xgboost_ic },
+      { name: "LightGBM", ic: quant.lightgbm_ic },
+      { name: "MLP", ic: quant.mlp_ic },
+      { name: "Ridge", ic: quant.ridge_ic },
+    ];
+    return ics.sort((a, b) => b.ic - a.ic)[0];
+  })();
+
+  const quantBiasDisplay = (() => {
+    if (!quantBias || quantBias === "--") return "待采集";
+    const m: Record<string, string> = { BULLISH: "看多", BEARISH: "看空", SIDEWAYS: "横盘" };
+    return m[quantBias] || quantBias;
+  })();
+  const quantBiasTrend: "up" | "down" | "neutral" =
+    quantBias === "BULLISH" ? "up" : quantBias === "BEARISH" ? "down" : "neutral";
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
@@ -98,6 +126,21 @@ export default function HomePage() {
           subtitle={latestHealth ? formatDate(latestHealth.created_at) : "首次运行中"}
           icon={<Shield className="w-4 h-4" />}
           trend="up"
+        />
+        <StatCard
+          title="量化方向"
+          value={quantBiasDisplay}
+          subtitle={quantBias !== "--" ? `综合IC ${quantIC}` : "bridge未推送"}
+          icon={<Brain className="w-4 h-4" />}
+          obfuscate
+          trend={quantBiasTrend}
+        />
+        <StatCard
+          title="模型信号"
+          value={quantTotal > 0 ? `买${quantBuys}·卖${quantSells}` : "--"}
+          subtitle={quantBestModel ? `${quantBestModel.name} IC ${(quantBestModel.ic*100).toFixed(1)}` : "等待训练"}
+          icon={<BarChart3 className="w-4 h-4" />}
+          trend={quantBuys > quantSells * 2 ? "up" : quantSells > quantBuys * 2 ? "down" : "neutral"}
         />
       </div>
 
