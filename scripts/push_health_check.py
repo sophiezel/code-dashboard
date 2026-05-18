@@ -24,10 +24,12 @@ try:
     n = len(db.execute("SELECT * FROM push_state").fetchall())
     print(f"Tables tracked: {n}")
     
-    # ECS check — 403 (auth wall) is OK
+    # ECS check — any HTTP response = reachable
     try:
         r = urllib.request.urlopen("https://tiangong.uno/login", timeout=15)
-        print(f"ECS: {r.status} (OK)" if r.status in (200, 403, 301, 302) else f"ECS: {r.status}")
+        print(f"ECS: reachable ({r.status})")
+    except urllib.error.HTTPError as e:
+        print(f"ECS: reachable ({e.code})")
     except Exception as e:
         print(f"ECS unreachable: {e}")
     
