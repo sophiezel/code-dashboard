@@ -20,11 +20,21 @@ function safeOverview(raw: RiskOverview | null): RiskOverview | null {
 }
 
 function safeEvents(raw: RiskEvent[]): RiskEvent[] {
-  return raw.map(evt => ({
-    ...evt,
-    metric_value: Number(evt.metric_value) || 0,
-    threshold: Number(evt.threshold) || 0,
-  }));
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.map(evt => {
+    const safe: RiskEvent = {
+      id: evt.id ?? 0,
+      date: String(evt.date ?? ""),
+      type: String(evt.type ?? ""),
+      symbol: String(evt.symbol ?? ""),
+      message: String(evt.message ?? ""),
+      severity: String(evt.severity ?? "info"),
+      metric_value: Number(evt.metric_value) || 0,
+      threshold: Number(evt.threshold) || 0,
+      acknowledged: Number(evt.acknowledged ?? 0),
+    };
+    return safe;
+  });
 }
 
 export default function RiskPage() {
