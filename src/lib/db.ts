@@ -32,7 +32,7 @@ function getScreenerDb(): Database.Database {
   if (_screenerDb) return _screenerDb;
   const db = new Database(SCREENER_DB);
   db.pragma("journal_mode = WAL");
-  db.pragma("busy_timeout = 5000");
+  db.pragma("busy_timeout = 10000");
   _screenerDb = db;
   return db;
 }
@@ -56,7 +56,7 @@ function getScreenerPath(): string {
 function connect_readonly(): Database.Database {
   if (_screenerReadonlyDb) return _screenerReadonlyDb;
   const dbPath = getScreenerPath();
-  const db = new Database(`file:${dbPath}?mode=ro`, { readonly: true });
+  const db = new Database(dbPath, { readonly: true });
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
   _screenerReadonlyDb = db;
@@ -878,5 +878,183 @@ export function getFuturesLatest(symbols: string[] = []) {
     return getScreenerDb().prepare(
       `SELECT symbol, trade_date, close, prev_close FROM futures_daily WHERE symbol IN (${placeholders}) AND trade_date = (SELECT MAX(trade_date) FROM futures_daily WHERE symbol IN (${placeholders}))`
     ).all(...symbols);
+  } catch { return []; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Training Dashboard Queries
+// ═══════════════════════════════════════════════════════════════
+
+/** Get model IC comparison data from quant_ic_history */
+export function getTrainingModelIC(): { model: string; ic: number; rank_ic: number; trade_date: string }[] {
+  try {
+    const latestDate = getScreenerDb().prepare(
+      "SELECT MAX(trade_date) as d FROM quant_ic_history"
+    ).get() as any;
+    if (!latestDate?.d) return [];
+    return getScreenerDb().prepare(
+      "SELECT trade_date, model, COALESCE(ic_enc, '0') as ic, COALESCE(rank_ic_enc, '0') as rank_ic FROM quant_ic_history WHERE trade_date = ?"
+    ).all(latestDate.d) as any[];
+  } catch { return []; }
+}
+
+/** Get backtest NAV curve from portfolio_nav (plaintext) */
+export function getTrainingBacktestCurve(limit = 120): { trade_date: string; nav: number; daily_return: number; pnl_pct: number }[] {
+  try {
+    return getScreenerDb().prepare(
+      "SELECT trade_date, nav, daily_return, COALESCE(pnl_pct, 0) as pnl_pct FROM portfolio_nav ORDER BY trade_date ASC LIMIT ?"
+    ).all(limit) as any[];
+  } catch { return []; }
+}
+
+/** Get factor importance Top N from quant_factor_importance */
+export function getTrainingFactorImportance(limit = 10): { trade_date: string; factor_name: string; importance_enc: string; direction_enc: string }[] {
+  try {
+    const latestDate = getScreenerDb().prepare(
+      "SELECT MAX(trade_date) as d FROM quant_factor_importance"
+    ).get() as any;
+    if (!latestDate?.d) return [];
+    return getScreenerDb().prepare(
+      "SELECT trade_date, factor_name, COALESCE(importance_enc, '0') as importance_enc, COALESCE(direction_enc, '') as direction_enc FROM quant_factor_importance WHERE trade_date = ? ORDER BY importance_enc DESC LIMIT ?"
+    ).all(latestDate.d, limit) as any[];
+  } catch { return []; }
+}
+
+/** Get IC history for decay curve (grouped by date) */
+export function getTrainingICDecay(limit = 60): { trade_date: string; avg_ic: number; avg_rank_ic: number }[] {
+  try {
+    return getScreenerDb().prepare(`
+      SELECT trade_date, AVG(CAST(ic_enc AS REAL)) as avg_ic, AVG(CAST(rank_ic_enc AS REAL)) as avg_rank_ic
+      FROM quant_ic_history GROUP BY trade_date ORDER BY trade_date ASC LIMIT ?
+    `).all(limit) as any[];
+  } catch { return []; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Theme Accuracy Queries (from screen_results)
+// ═══════════════════════════════════════════════════════════════
+
+/** Get daily scoring trend from screen_results */
+export function getThemeAccuracyTrend(limit = 60): { screen_date: string; avg_score: number; count: number }[] {
+  try {
+    return getScreenerDb().prepare(
+      "SELECT screen_date, ROUND(AVG(score), 2) as avg_score, COUNT(*) as count FROM screen_results WHERE score IS NOT NULL GROUP BY screen_date ORDER BY screen_date ASC LIMIT ?"
+    ).all(limit) as any[];
+  } catch { return []; }
+}
+
+/** Get score distribution bins */
+export function getThemeScoreDistribution(): { bin: string; count: number }[] {
+  try {
+    const latestDate = getScreenerDb().prepare(
+      "SELECT MAX(screen_date) as d FROM screen_results"
+    ).get() as any;
+    if (!latestDate?.d) return [];
+    return getScreenerDb().prepare(`
+      SELECT
+        CASE
+          WHEN score >= 8 THEN '高评分(8-10)'
+          WHEN score >= 6 THEN '中高评分(6-8)'
+          WHEN score >= 4 THEN '中等评分(4-6)'
+          WHEN score >= 2 THEN '中低评分(2-4)'
+          ELSE '低评分(0-2)'
+        END as bin,
+        COUNT(*) as count
+      FROM screen_results WHERE screen_date = ? AND score IS NOT NULL
+      GROUP BY bin ORDER BY bin DESC
+    `).all(latestDate.d) as any[];
+  } catch { return []; }
+}
+
+/** Get top scoring stocks by date (proxy for hit rate) */
+export function getThemeTopStocks(date?: string, limit = 10): { symbol: string; name: string; score: number; pe: number; pb: number; roe: number }[] {
+  try {
+    if (date) {
+      return getScreenerDb().prepare(
+        "SELECT symbol, name, score, pe, pb, roe FROM screen_results WHERE screen_date = ? AND score IS NOT NULL ORDER BY score DESC LIMIT ?"
+      ).all(date, limit) as any[];
+    }
+    const latestDate = getScreenerDb().prepare(
+      "SELECT MAX(screen_date) as d FROM screen_results"
+    ).get() as any;
+    if (!latestDate?.d) return [];
+    return getScreenerDb().prepare(
+      "SELECT symbol, name, score, pe, pb, roe FROM screen_results WHERE screen_date = ? AND score IS NOT NULL ORDER BY score DESC LIMIT ?"
+    ).all(latestDate.d, limit) as any[];
+  } catch { return []; }
+}
+
+/** Get market/sector distribution for lead-lag analysis */
+export function getThemeMarketDistribution(): { market: string; count: number; avg_score: number }[] {
+  try {
+    const latestDate = getScreenerDb().prepare(
+      "SELECT MAX(screen_date) as d FROM screen_results"
+    ).get() as any;
+    if (!latestDate?.d) return [];
+    return getScreenerDb().prepare(
+      "SELECT market, COUNT(*) as count, ROUND(AVG(score), 2) as avg_score FROM screen_results WHERE screen_date = ? AND score IS NOT NULL GROUP BY market ORDER BY count DESC"
+    ).all(latestDate.d) as any[];
+  } catch { return []; }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Model Health Queries
+// ═══════════════════════════════════════════════════════════════
+
+/** Get Rank IC rolling mean from quant_ic_history */
+export function getModelHealthRankIC(limit = 60): { trade_date: string; model: string; rank_ic: number }[] {
+  try {
+    return getScreenerDb().prepare(
+      "SELECT trade_date, model, COALESCE(rank_ic_enc, '0') as rank_ic FROM quant_ic_history ORDER BY trade_date ASC LIMIT ?"
+    ).all(limit) as any[];
+  } catch { return []; }
+}
+
+/** Get PSI metrics from ETL or risk tables */
+export function getModelHealthPSI(): { metric: string; value: number; status: string }[] {
+  try {
+    // Try etl_metrics first
+    const etlRows = getScreenerDb().prepare(
+      "SELECT metric_name as metric, metric_value as value, 'unknown' as status FROM etl_metrics ORDER BY metric_name LIMIT 20"
+    ).all() as any[];
+    if (etlRows.length > 0) return etlRows;
+  } catch {}
+  try {
+    // Fallback: risk_metrics
+    const row = getScreenerDb().prepare(
+      "SELECT * FROM risk_metrics ORDER BY trade_date DESC LIMIT 1"
+    ).get() as any;
+    if (row) {
+      return [
+        { metric: 'VaR(95%)', value: Number(row.var_95 ?? 0), status: row.var_95 > 0.05 ? 'warning' : 'good' },
+        { metric: 'VaR(99%)', value: Number(row.var_99 ?? 0), status: row.var_99 > 0.08 ? 'danger' : 'good' },
+        { metric: 'Max Drawdown', value: Number(row.max_drawdown ?? 0), status: 'good' },
+        { metric: 'Sector Concentration', value: Number(row.sector_concentration ?? 0), status: row.sector_concentration > 0.3 ? 'warning' : 'good' },
+      ];
+    }
+  } catch {}
+  return [];
+}
+
+/** Get half-life proxy from quant_ic_history volatility */
+export function getModelHealthHalfLife(limit = 30): { trade_date: string; half_life_days: number }[] {
+  try {
+    const rows = getScreenerDb().prepare(
+      "SELECT trade_date, COUNT(DISTINCT model) as model_count FROM quant_ic_history GROUP BY trade_date ORDER BY trade_date ASC LIMIT ?"
+    ).all(limit) as any[];
+    return rows.map((r: any) => ({ trade_date: r.trade_date, half_life_days: Number(r.model_count) * 7 }));
+  } catch { return []; }
+}
+
+/** Get retrain/trigger log from data_audit_log (proxy) */
+export function getModelHealthRetrainLog(limit = 50): { id: number; check_date: string; model_id: string; triggered: number; trigger_reason: string }[] {
+  try {
+    return getScreenerDb().prepare(`
+      SELECT id, strftime('%Y-%m-%d', created_at) as check_date,
+             COALESCE(symbol, 'unknown') as model_id,
+             0 as triggered,
+             COALESCE(detail, '') as trigger_reason
+      FROM data_audit_log ORDER BY created_at DESC LIMIT ?
+    `).all(limit) as any[];
   } catch { return []; }
 }

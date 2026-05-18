@@ -1,4 +1,4 @@
-import { getScreenerDb } from "./db";
+import { getScreenerDb, connect_readonly } from "./db";
 import * as crypto from "crypto";
 
 // ─── Types ────────────────────────────────────────────
@@ -27,20 +27,20 @@ export interface InviteCode {
 // ─── Users ─────────────────────────────────────────────
 
 export function getUserByPhone(phone: string): User | undefined {
-  return getScreenerDb()
+  return connect_readonly()
     .prepare("SELECT * FROM users WHERE phone = ?")
     .get(phone) as User | undefined;
 }
 
 export function getUserById(id: number): User | undefined {
-  return getScreenerDb()
+  return connect_readonly()
     .prepare("SELECT * FROM users WHERE id = ?")
     .get(id) as User | undefined;
 }
 
 export function getUserByDeviceFp(fp: string): User | undefined {
   // device_fps is JSON array, search via LIKE
-  return getScreenerDb()
+  return connect_readonly()
     .prepare("SELECT * FROM users WHERE device_fps LIKE ? AND status = 'active'")
     .get(`%${fp}%`) as User | undefined;
 }
@@ -103,7 +103,7 @@ export function removeUserDevice(id: number, deviceIndex?: number): void {
 }
 
 export function getAllUsers(): User[] {
-  return getScreenerDb()
+  return connect_readonly()
     .prepare("SELECT * FROM users ORDER BY created_at DESC")
     .all() as User[];
 }
@@ -111,7 +111,7 @@ export function getAllUsers(): User[] {
 // ─── Invite Codes ──────────────────────────────────────
 
 export function getInviteCode(code: string): InviteCode | undefined {
-  return getScreenerDb()
+  return connect_readonly()
     .prepare("SELECT * FROM invite_codes WHERE code = ? AND used = 0")
     .get(code) as InviteCode | undefined;
 }
@@ -139,7 +139,7 @@ export function consumeInviteCode(code: string): void {
 }
 
 export function getUnusedInviteCodes(phone: string): InviteCode[] {
-  return getScreenerDb()
+  return connect_readonly()
     .prepare(
       "SELECT * FROM invite_codes WHERE phone = ? AND used = 0 AND expires_at > datetime('now') ORDER BY created_at DESC"
     )
