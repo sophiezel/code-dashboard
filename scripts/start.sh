@@ -12,4 +12,4 @@ source scripts/decrypt-env.sh
 if [ -d ".next/static" ] && [ -d ".next/standalone/.next" ]; then
   cp -r .next/static .next/standalone/.next/ 2>/dev/null
 fi
-exec node node_modules/.bin/next start -p 3456
+exec node .next/standalone/server.js

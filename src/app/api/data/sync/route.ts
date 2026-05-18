@@ -103,6 +103,31 @@ function insertRows(
 
 // ─── Route ────────────────────────────────────────────
 
+/**
+ * Process a single batch (table + rows).
+ */
+function processBatch(
+  db: Database.Database,
+  table: string,
+  rows: Record<string, unknown>[]
+): { applied: number; errors: string[] } {
+  if (rows.length === 0) return { applied: 0, errors: [] };
+  const transaction = db.transaction(() => {
+    return insertRows(db, table, rows);
+  });
+  return transaction();
+}
+
+/**
+ * Sync response item for a single table or batch.
+ */
+interface SyncResult {
+  table: string;
+  received: number;
+  applied: number;
+  errors?: string[];
+}
+
 export async function POST(req: NextRequest) {
   // 1. Auth
   const authResult = authorize(req);
@@ -111,15 +136,51 @@ export async function POST(req: NextRequest) {
   }
 
   // 2. Parse body
-  let body: { table?: string; rows?: Record<string, unknown>[]; source?: string };
+  let body: any;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { table, rows, source } = body;
+  const { table, rows, source, batches } = body;
+  const db = getWriteDb();
+  const results: SyncResult[] = [];
 
+  // ─── Batches mode ───────────────────────────────────
+  if (batches !== undefined) {
+    if (!Array.isArray(batches)) {
+      return NextResponse.json({ error: "'batches' must be an array" }, { status: 400 });
+    }
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i];
+      if (!batch || typeof batch.table !== "string" || !Array.isArray(batch.rows)) {
+        return NextResponse.json(
+          { error: `batches[${i}] must have 'table' (string) and 'rows' (array)` },
+          { status: 400 }
+        );
+      }
+      let result: { applied: number; errors: string[] };
+      try {
+        result = processBatch(db, batch.table, batch.rows);
+      } catch (err: any) {
+        result = { applied: 0, errors: [`transaction failed: ${err.message || String(err)}`] };
+      }
+      cacheInvalidate(batch.table);
+      console.log(
+        `[sync] ${source || "unknown"} -> ${batch.table}: ${result.applied}/${batch.rows.length} rows${result.errors.length ? `, ${result.errors.length} errors` : " OK"}`
+      );
+      results.push({
+        table: batch.table,
+        received: batch.rows.length,
+        applied: result.applied,
+        errors: result.errors.length > 0 ? result.errors.slice(0, 20) : undefined,
+      });
+    }
+    return NextResponse.json({ ok: true, batches: results });
+  }
+
+  // ─── Single-table mode (legacy) ────────────────────
   if (!table || typeof table !== "string") {
     return NextResponse.json({ error: "Missing or invalid 'table'" }, { status: 400 });
   }
@@ -127,19 +188,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing or invalid 'rows' (must be an array)" }, { status: 400 });
   }
 
-  // 3. Write to DB
-  const db = getWriteDb();
   const received = rows.length;
-
-  // Wrap in a transaction for performance, but handle row failures gracefully
-  const transaction = db.transaction(() => {
-    const result = insertRows(db, table, rows);
-    return result;
-  });
-
   let result: { applied: number; errors: string[] };
   try {
-    result = transaction();
+    result = processBatch(db, table, rows);
   } catch (err: any) {
     return NextResponse.json(
       { error: `Transaction failed: ${err.message || String(err)}`, received, applied: 0 },
@@ -147,17 +199,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 4. Invalidate cache for this table
   cacheInvalidate(table);
 
-  // 5. Log
   if (result.errors.length > 0) {
     console.warn(`[sync] ${source || "unknown"} -> ${table}: ${result.applied}/${received} rows, ${result.errors.length} errors`, result.errors.slice(0, 5));
   } else {
     console.log(`[sync] ${source || "unknown"} -> ${table}: ${result.applied}/${received} rows OK`);
   }
 
-  // 6. Respond
   return NextResponse.json({
     received,
     applied: result.applied,
