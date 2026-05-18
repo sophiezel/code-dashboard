@@ -13,3 +13,4 @@ tsconfig.tsbuildinfo
 # SQLite runtime
 *.db-shm
 *.db-wal
+data/screener.db

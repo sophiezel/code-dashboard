@@ -78,6 +78,9 @@ TABLE_SLA = [
     ("stock_basic",None,"static",0,1440,3600),
     ("index_global_daily","trade_date","daily_close",915,1440,600),
     ("stock_fund_flow","trade_date","t1_morning",480,720,600),
+    # Phase 6 new tables
+    ("stock_industry",None,"static",0,1440,3600),
+    ("bond_yield","date","daily_close",0,1440,3600),
 ]
 
 def in_window(ws, we):
