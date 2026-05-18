@@ -134,8 +134,63 @@ def cold_start():
     state.commit()
     log("Cold start done")
 
+def self_check():
+    """Startup validation — catch config errors before they crash the agent.
+    
+    Checks (non-fatal WARN, never blocks startup):
+    1. SSH tunnel reachable
+    2. Every SLA table exists in source DB
+    3. Every ts_col exists in its table schema
+    4. ECS sync endpoint reachable
+    """
+    issues = 0
+    
+    # 1. Tunnel
+    try:
+        r = urllib.request.urlopen("http://127.0.0.1:3099/login", timeout=10)
+        log(f"SELFCHECK: tunnel OK ({r.status})")
+    except Exception as e:
+        log(f"SELFCHECK: tunnel FAIL ({e})")
+        issues += 1
+    
+    # 2. ECS endpoint
+    try:
+        test_body = json.dumps({"table":"_health_check","rows":[{"test":1}],"source":"selfcheck"}).encode()
+        req = urllib.request.Request(SYNC_URL, data=test_body,
+            headers={"Authorization": f"Bearer {SYNC_SECRET}","Content-Type":"application/json"})
+        r = urllib.request.urlopen(req, timeout=15)
+        log(f"SELFCHECK: sync endpoint OK ({r.status})")
+    except Exception as e:
+        log(f"SELFCHECK: sync endpoint FAIL ({e})")
+        issues += 1
+    
+    # 3. Schema validation
+    src = sqlite3.connect(SRC_DB)
+    for table, ts_col, cat, ws, we, interval in TABLE_SLA:
+        # Table exists?
+        exists = src.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",[table]).fetchone()
+        if not exists:
+            log(f"SELFCHECK: SKIP {table} — not in source DB")
+            continue
+        
+        # ts_col exists?
+        if ts_col:
+            cols = [c[1] for c in src.execute(f'PRAGMA table_info("{table}")')]
+            if ts_col not in cols:
+                log(f"SELFCHECK: WARN {table} — ts_col='{ts_col}' not in schema (have: {cols[:5]}...)")
+                issues += 1
+    
+    src.close()
+    
+    if issues:
+        log(f"SELFCHECK: {issues} warnings (agent will continue)")
+    else:
+        log(f"SELFCHECK: all OK ({len(TABLE_SLA)} tables)")
+    return issues
+
 def main():
     log("=== Push Agent v3 (HTTP API) ===")
+    self_check()
     
     ct = state.execute("SELECT COUNT(*) FROM push_state WHERE status='cold'").fetchone()[0]
     tt = state.execute("SELECT COUNT(*) FROM push_state").fetchone()[0]
