@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-sync_push_agent.py — Mac→ECS direct SQLite push using SSH tunnel
-Simple, reliable: no Next.js API dependency.
-"""
-import sqlite3, json, time, os, sys, fcntl, subprocess, tempfile
+sync_push_agent.py — Mac->ECS push agent via HTTP API over SSH tunnel
+Uses Next.js /api/data/sync endpoint instead of scp+ssh sqlite3.
+No orphaned sqlite3 processes on ECS."""
+import sqlite3, json, time, os, sys, fcntl, urllib.request
 from datetime import datetime, timedelta
 
-ECS_HOST = "root@47.93.214.189"
-SSH_KEY = os.path.expanduser("~/.ssh/hermes-ecs")
-ECS_DB = "/opt/dashboard/data/screener.db"
+SYNC_URL = "http://127.0.0.1:3099/api/data/sync"
+SYNC_SECRET = os.environ.get("DATA_SYNC_SECRET", "test")
 SRC_DB = os.path.expanduser("~/code/stock-screener/data/screener.db")
 STATE_DB = os.path.expanduser("~/.hermes/data/push_state.db")
 LOCKFILE = "/tmp/push_agent.lock"
@@ -81,64 +80,47 @@ TABLE_SLA = [
     # Phase 6 new tables
     ("stock_industry",None,"static",0,1440,3600),
     ("bond_yield","date","daily_close",0,1440,3600),
+    # Full coverage tables
+    ("quant_signals","trade_date","daily_close",960,1440,600),
+    ("portfolio_nav","date","daily_close",960,1440,600),
+    ("etl_metrics","ts","daily_close",960,1440,600),
+    ("data_provenance","fetch_time","daily_close",0,1440,3600),
 ]
 
 def in_window(ws, we):
     t = datetime.now().hour * 60 + datetime.now().minute
     return ws <= t <= we if ws <= we else t >= ws or t <= we
 
-def push_via_ssh(table, rows):
-    """Direct SQLite push over SSH — avoids Next.js entirely"""
+def push_via_http(table, rows):
+    """Push rows via HTTP POST to Next.js API endpoint — no orphaned processes"""
     if not rows: return True, None
-    
-    # Build SQL statements
-    src = sqlite3.connect(SRC_DB)
-    cols = [c[1] for c in src.execute(f'PRAGMA table_info("{table}")')]
-    src.close()
-    
-    sql_lines = []
-    for row in rows:
-        vals = []
-        for c in cols:
-            v = row.get(c)
-            if v is None: vals.append("NULL")
-            elif isinstance(v, (int, float)): vals.append(str(v))
-            else: vals.append("'" + str(v).replace("'", "''") + "'")
-        cl = ",".join(f'"{c}"' for c in cols)
-        sql_lines.append(f"INSERT OR REPLACE INTO {table} ({cl}) VALUES ({','.join(vals)});")
-    
-    sql_text = "\n".join(sql_lines)
-    
-    # Write SQL to temp file, scp, and execute on ECS
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.sql', delete=False) as f:
-        f.write("PRAGMA journal_mode=WAL;\nBEGIN;\n")
-        f.write(sql_text)
-        f.write("\nCOMMIT;\n")
-        tmpfile = f.name
-    
+
+    payload = json.dumps({"table": table, "rows": rows}).encode("utf-8")
+    req = urllib.request.Request(
+        SYNC_URL,
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {SYNC_SECRET}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
     try:
-        # scp to ECS
-        subprocess.run(["scp", "-i", SSH_KEY, "-o", "StrictHostKeyChecking=accept-new", 
-                        "-o", "ConnectTimeout=10", tmpfile, f"{ECS_HOST}:/tmp/push_{table}.sql"],
-                       capture_output=True, timeout=30)
-        
-        # Execute on ECS
-        result = subprocess.run([
-            "ssh", "-i", SSH_KEY, "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10",
-            ECS_HOST,
-            f"sqlite3 {ECS_DB} < /tmp/push_{table}.sql && rm /tmp/push_{table}.sql && echo OK"
-        ], capture_output=True, text=True, timeout=60)
-        
-        if "OK" in result.stdout:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            body = json.loads(resp.read().decode("utf-8"))
+        if resp.status == 200:
+            if body.get("errors"):
+                return False, f"{len(body['errors'])} row errors: {body['errors'][0]}"
             return True, None
-        else:
-            return False, result.stderr[:100] if result.stderr else "no output"
-    except subprocess.TimeoutExpired:
-        return False, "timeout"
+        return False, body.get("error", f"HTTP {resp.status}")
+    except urllib.error.HTTPError as e:
+        try:
+            detail = json.loads(e.read().decode("utf-8"))
+            return False, detail.get("error", str(e))
+        except Exception:
+            return False, str(e)[:100]
     except Exception as e:
         return False, str(e)[:100]
-    finally:
-        os.unlink(tmpfile)
 
 # Cold start (7-day fallback)
 def cold_start():
@@ -153,7 +135,7 @@ def cold_start():
     log("Cold start done")
 
 def main():
-    log("=== Push Agent v2 (SSH direct) ===")
+    log("=== Push Agent v3 (HTTP API) ===")
     
     ct = state.execute("SELECT COUNT(*) FROM push_state WHERE status='cold'").fetchone()[0]
     tt = state.execute("SELECT COUNT(*) FROM push_state").fetchone()[0]
@@ -197,12 +179,15 @@ def main():
             cols = [c[1] for c in src.execute(f'PRAGMA table_info("{table}")')]
             data = [{c: r[c] for c in cols} for r in rows]
             
-            ok, err = push_via_ssh(table, data)
+            ok, err = push_via_http(table, data)
             if ok:
                 if ts_col and rows:
                     new_ts = max(str(r[ts_col]) for r in rows)
                     state.execute("UPDATE push_state SET last_synced_ts=?,last_push_at=? WHERE table_name=?",
                                   [new_ts, now.isoformat(), table])
+                elif not ts_col:
+                    state.execute("UPDATE push_state SET last_push_at=? WHERE table_name=?",
+                                  [now.isoformat(), table])
                 log(f"OK {table}: {len(rows)} rows ({time.time()-t0:.1f}s)")
             else:
                 log(f"FAIL {table}: {err}")

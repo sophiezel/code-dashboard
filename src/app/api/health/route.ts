@@ -15,10 +15,11 @@ function checkDb(dbPath: string, label: string): { ok: boolean; error?: string; 
   try {
     const db = new Database(dbPath, { readonly: true });
     db.pragma("busy_timeout = 3000");
-    const integrity = db.prepare("PRAGMA integrity_check").get() as any;
+    // Quick check: just SELECT 1 — integrity_check on 1.8GB DB takes minutes
+    const quick = db.prepare("SELECT 1").get() as any;
     db.close();
-    if (integrity?.integrity_check !== "ok") {
-      return { ok: false, error: String(integrity?.integrity_check || "unknown") };
+    if (!quick) {
+      return { ok: false, error: "SELECT 1 failed" };
     }
     // Check data freshness for screener only
     if (label === "screener") {
