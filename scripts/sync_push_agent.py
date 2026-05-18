@@ -77,14 +77,14 @@ TABLE_SLA = [
     ("stock_basic",None,"static",0,1440,3600),
     ("index_global_daily","trade_date","daily_close",915,1440,600),
     ("stock_fund_flow","trade_date","t1_morning",480,720,600),
-    # Phase 6 new tables
-    ("stock_industry",None,"static",0,1440,3600),
-    ("bond_yield","date","daily_close",0,1440,3600),
+    # Phase 6 tables — registered but no data yet, add when data exists
+    # ("stock_industry",None,"static",0,1440,3600),
+    # ("bond_yield","date","daily_close",0,1440,3600),
     # Full coverage tables
     ("quant_signals","trade_date","daily_close",960,1440,600),
     ("portfolio_nav","date","daily_close",960,1440,600),
     ("etl_metrics","ts","daily_close",960,1440,600),
-    ("data_provenance","fetch_time","daily_close",0,1440,3600),
+    ("data_provenance",None,"static",0,1440,3600),
 ]
 
 def in_window(ws, we):
@@ -181,13 +181,16 @@ def main():
             
             ok, err = push_via_http(table, data)
             if ok:
-                if ts_col and rows:
-                    new_ts = max(str(r[ts_col]) for r in rows)
-                    state.execute("UPDATE push_state SET last_synced_ts=?,last_push_at=? WHERE table_name=?",
-                                  [new_ts, now.isoformat(), table])
-                elif not ts_col:
-                    state.execute("UPDATE push_state SET last_push_at=? WHERE table_name=?",
-                                  [now.isoformat(), table])
+                try:
+                    if ts_col and rows:
+                        new_ts = max(str(r[ts_col]) for r in rows)
+                        state.execute("UPDATE push_state SET last_synced_ts=?,last_push_at=? WHERE table_name=?",
+                                      [new_ts, now.isoformat(), table])
+                    elif not ts_col:
+                        state.execute("UPDATE push_state SET last_push_at=? WHERE table_name=?",
+                                      [now.isoformat(), table])
+                except (KeyError, IndexError) as e:
+                    log(f"WARN {table}: cannot update ts ({e})")
                 log(f"OK {table}: {len(rows)} rows ({time.time()-t0:.1f}s)")
             else:
                 log(f"FAIL {table}: {err}")
