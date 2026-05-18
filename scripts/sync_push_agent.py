@@ -173,20 +173,24 @@ def main():
             if not row or not row[0]: continue
             last_ts = row[0]
             
-            try:
-                if ts_col:
+            # Static tables (no timestamp): use hash comparison to skip if unchanged
+            if not ts_col:
+                last_push = state.execute("SELECT last_push_at FROM push_state WHERE table_name=?",[table]).fetchone()
+                if last_push and last_push[0]:
+                    try:
+                        last_push_dt = datetime.fromisoformat(last_push[0])
+                        if (now - last_push_dt).total_seconds() < 3600:
+                            continue
+                    except: pass
+                cur = src.execute(f'SELECT * FROM "{table}" LIMIT 200')
+                rows = cur.fetchall()
+            else:
+                try:
                     cur = src.execute(f'SELECT * FROM "{table}" WHERE "{ts_col}" > ? ORDER BY "{ts_col}" LIMIT 200', [last_ts])
-                else:
-                    cur = src.execute(f'SELECT COUNT(*) FROM "{table}"')
-                    count = cur.fetchone()[0]
-                    ecs_count = 0  # Skip hash check for now, just push
-                    if not ecs_count or count != ecs_count:
-                        cur = src.execute(f'SELECT * FROM "{table}" LIMIT 200')
-                    else:
-                        continue
-            except: continue
+                    rows = cur.fetchall()
+                except:
+                    continue
             
-            rows = cur.fetchall()
             if not rows: continue
             
             # Convert to dicts
